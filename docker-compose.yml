@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_PASSWORD=openpgpwd
+      - POSTGRES_USER=openpg
+    volumes:
+      - odoo-db-data:/var/lib/postgresql/data
+
+  odoo:
+    image: odoo:18.0
+    depends_on:
+      - db
+    ports:
+      - "8070:8069"
+    volumes:
+      - odoo-web-data:/var/lib/odoo
+      - ./extra-addons:/mnt/extra-addons # Nơi bạn code module Travel
+      - ./config:/etc/odoo # Để tùy chỉnh file odoo.conf
+    environment:
+      - HOST=db
+      - USER=openpg
+      - PASSWORD=openpgpwd
+
+volumes:
+  odoo-db-data:
+  odoo-web-data:
