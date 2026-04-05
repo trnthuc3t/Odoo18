@@ -1,1 +1,9 @@
 /config
+extra-addons/muk_web_theme
+extra-addons/muk_web_chatter
+extra-addons/muk_web_colors
+extra-addons/muk_web_appsbar
+extra-addons/muk_web_dialog
+__pycache__/
+*.pyc
+*.pyo

@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="tour_combo_multiple_choice.ComboMultipleChoiceConfiguratorDialog">
+        <Dialog
+            title="props.display_name"
+            contentClass="'sale-combo-configurator-dialog'"
+        >
+            <t t-set-slot="header">
+                <div class="d-flex justify-content-between align-items-center w-100">
+                    <span class="h5 mb-0" t-out="props.display_name"/>
+                    <div class="d-flex ms-auto gap-2">
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-primary"
+                            t-on-click="selectAllCombos"
+                        >
+                            Select All Products
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-secondary"
+                            t-on-click="deselectAllCombos"
+                        >
+                            Deselect All Products
+                        </button>
+                    </div>
+                </div>
+            </t>
+            <div t-foreach="props.combos" t-as="combo" t-key="combo.id">
+                <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+                    <span
+                        name="combo_multiple_choice_configurator_title"
+                        class="h4 mb-0"
+                        t-out="combo.name"
+                    />
+                    <div class="d-flex ms-auto gap-2">
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-secondary"
+                            t-on-click="() => this.selectAllInCombo(combo.id, combo.combo_items)"
+                        >
+                            Select All
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-secondary"
+                            t-on-click="() => this.deselectAllInCombo(combo.id, combo.combo_items)"
+                        >
+                            Deselect All
+                        </button>
+                    </div>
+                </div>
+                <div class="combo-item-grid d-flex d-md-grid gap-4 pb-2 pb-md-0 overflow-x-auto">
+                    <t t-foreach="combo.combo_items" t-as="comboItem" t-key="comboItem.id">
+                        <div class="combo-item-wrapper">
+                            <ProductCard
+                                product="comboItem.product"
+                                extraPrice="comboItem.extra_price"
+                                onClick="() => this.toggleComboItem(combo.id, comboItem)"
+                                isSelected="state.selectedComboItems.get(combo.id)?.has(comboItem.id)"
+                            />
+                        </div>
+                    </t>
+                </div>
+            </div>
+            <t t-set-slot="footer">
+                <button
+                    name="combo_multiple_choice_configurator_confirm_button"
+                    class="btn btn-primary"
+                    t-att-disabled="state.isLoading"
+                    t-on-click="confirm"
+                >
+                    Confirm
+                </button>
+                <button
+                    name="combo_multiple_choice_configurator_cancel_button"
+                    class="btn btn-secondary"
+                    t-on-click="cancel"
+                >
+                    Cancel
+                </button>
+                <!-- This div acts as a spacer to left-align the elements before it and right-align
+                the elements after it. -->
+                <div style="flex: 1" class="d-none d-md-block"/>
+                <div t-if="this.props.options.showQuantity" class="w-100 w-md-auto mx-0 mx-md-2">
+                    <QuantityButtons
+                        quantity="state.quantity"
+                        setQuantity="quantity => this.setQuantity(quantity)"
+                        isMinusButtonDisabled="state.quantity === 1"
+                        btnClasses="'d-inline-block w-auto'"
+                    />
+                </div>
+                <div class="d-flex flex-column justify-content-center">
+                    <span
+                        name="combo_multiple_choice_configurator_total"
+                        class="h4 mb-0"
+                        t-out="totalMessage"
+                    />
+                    <span
+                        t-if="this.props.price_info"
+                        t-out="this.props.price_info"
+                        class="text-muted"
+                    />
+                </div>
+            </t>
+        </Dialog>
+    </t>
+</templates>

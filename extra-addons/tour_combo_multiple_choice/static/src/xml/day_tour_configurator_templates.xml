@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="tour_combo_multiple_choice.DayTourConfiguratorDialog">
+        <Dialog title="props.display_name" contentClass="'sale-day-tour-configurator-dialog'">
+            <div class="p-3">
+                <div class="mb-4">
+                    <label class="form-label fw-bold" for="dayTourCustomerQty">
+                        Number of Customers
+                    </label>
+                    <input
+                        type="number"
+                        class="form-control"
+                        id="dayTourCustomerQty"
+                        t-att-value="state.customerQuantity"
+                        t-on-input="onQuantityInput"
+                        min="1"
+                        step="1"
+                    />
+                </div>
+
+                <div t-if="state.isLoading" class="text-center py-3">
+                    <i class="fa fa-spinner fa-spin"/> Loading...
+                </div>
+
+                <div t-if="!state.isLoading and state.comboItems.length > 0">
+                    <h5>Selected Services</h5>
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Combo</th>
+                                <th>Product</th>
+                                <th class="text-end">Fixed Price</th>
+                                <th class="text-center">Shared</th>
+                                <th class="text-end">Price / Person</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="state.comboItems" t-as="item" t-key="item.combo_item_id">
+                                <tr>
+                                    <td t-out="item.combo_name"/>
+                                    <td t-out="item.product_name"/>
+                                    <td class="text-end" t-out="item.formatted_fixed_price"/>
+                                    <td class="text-center">
+                                        <i t-if="item.shared_cost_enabled" class="fa fa-check text-success"/>
+                                    </td>
+                                    <td class="text-end" t-out="item.formatted_price_per_person"/>
+                                </tr>
+                            </t>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div t-if="!state.isLoading and state.comboItems.length === 0" class="text-muted text-center py-3">
+                    No matching combo items found for this quantity.
+                </div>
+            </div>
+
+            <t t-set-slot="footer">
+                <button
+                    class="btn btn-primary"
+                    t-att-disabled="state.isLoading or state.comboItems.length === 0"
+                    t-on-click="confirm"
+                >
+                    Confirm
+                </button>
+                <button class="btn btn-secondary" t-on-click="cancel">
+                    Cancel
+                </button>
+                <div style="flex: 1" class="d-none d-md-block"/>
+                <div class="d-flex flex-column justify-content-center">
+                    <span class="h4 mb-0" t-out="totalMessage"/>
+                </div>
+            </t>
+        </Dialog>
+    </t>
+</templates>

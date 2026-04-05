@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_combo_view_form_inherit_combo_multiple_choice" model="ir.ui.view">
+        <field name="name">product.combo.form.inherit.combo.multiple.choice</field>
+        <field name="model">product.combo</field>
+        <field name="inherit_id" ref="product.product_combo_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='company_id']" position="after">
+                <field name="is_multiple_choice" widget="boolean_toggle" string="Multiple Choice Combo"/>
+                <field name="is_day_tour" widget="boolean_toggle" string="Day Tour"/>
+            </xpath>
+            <xpath expr="//field[@name='combo_item_ids']" position="replace">
+                <field name="combo_item_ids">
+                    <list editable="bottom">
+                        <field name="currency_id" column_invisible="True"/>
+                        <field name="product_id"/>
+                        <field name="lst_price" widget="monetary" options="{'field_digits': True}" column_invisible="parent.is_multiple_choice"/>
+                        <field name="extra_price" widget="monetary" options="{'field_digits': True}" column_invisible="parent.is_multiple_choice"/>
+                        <field name="fixed_price" widget="monetary" options="{'field_digits': True}" column_invisible="parent.is_multiple_choice == False"/>
+                        <field name="quantity" column_invisible="parent.is_multiple_choice == False or parent.is_day_tour == True"/>
+                        <field name="min_quantity" column_invisible="parent.is_multiple_choice == False and parent.is_day_tour == False"/>
+                        <field name="max_quantity" column_invisible="parent.is_multiple_choice == False and parent.is_day_tour == False"/>
+                        <field name="shared_cost_enabled" column_invisible="parent.is_multiple_choice == False and parent.is_day_tour == False"/>
+                    </list>
+                </field>
+            </xpath>
+        </field>
+    </record>
+</odoo>

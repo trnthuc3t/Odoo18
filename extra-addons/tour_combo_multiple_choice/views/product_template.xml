@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_template_form_view_inherit_combo_multiple_choice" model="ir.ui.view">
+        <field name="name">product.template.form.inherit.combo.multiple.choice</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='type']" position="after">
+                <field name="is_combo_multiple_choice" widget="boolean_toggle" string="Multiple Choice Combo" invisible="type != 'combo'"/>
+                <field name="is_day_tour" widget="boolean_toggle" string="Day Tour" invisible="type != 'combo'"/>
+            </xpath>
+            <xpath expr="//field[@name='combo_ids']" position="replace">
+                <field name="combo_ids" widget="many2many_tags" 
+                        placeholder="e.g. Starter - Meal - Desert" 
+                        invisible="type != 'combo'" 
+                        options="{'no_quick_create': True,'edit_tags': True,}"
+                        domain="[('is_multiple_choice','=',is_combo_multiple_choice), ('is_day_tour','=',is_day_tour)]"
+                />
+            </xpath>
+        </field>
+    </record>
+</odoo>
