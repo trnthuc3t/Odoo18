@@ -1,0 +1,28 @@
+<odoo>
+    <record id="view_export_vat_wizard_form" model="ir.ui.view">
+        <field name="name">export.vat.wizard.form</field>
+        <field name="model">export.vat.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Export VAT Wizard">
+                <group>
+                    <field name="customer_id" readonly="1"/>
+                    <field name="vat_number"/>
+                    <field name="company_name"/>
+                    <field name="address"/>
+                </group>
+                <footer>
+                    <button name="action_export" type="object" string="Export" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_export_vat_wizard" model="ir.actions.act_window">
+        <field name="name">Export VAT Wizard</field>
+        <field name="res_model">export.vat.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="view_id" ref="view_export_vat_wizard_form"/>
+    </record>
+</odoo>

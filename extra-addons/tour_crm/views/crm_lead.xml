@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_crm_lead_form_inherit_lead_line" model="ir.ui.view">
+        <field name="name">crm.lead.form.inherit.lead.line</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='expected_revenue']" position="replace">
+                <field name="currency_id" style="width: 20%" readonly="stage_id != 1" nolabel="1" widget="many2one" options="{'no_create': True, 'no_open': True}"/>
+                <field name="expected_revenue" class="o_input_13ch" widget='monetary' options="{'currency_field': 'currency_id'}"/>
+            </xpath>
+            <xpath expr="//page[@name='internal_notes']" position="before">
+                <page string="Lead Lines" name="lead_lines">
+                    <field name="crm_lead_line_ids" widget="one2many_list" nolabel="1">
+                        <list editable="bottom">
+                            <field name="product_template_id" 
+                                required="1"
+                                widget="crm_lead_product_many2one"
+                                domain="[('sale_ok', '=', True)]"
+                                options="{'no_open': True}"
+                                placeholder="Type to find a product..."/>
+                            <field name="product_id" column_invisible="0" readonly="1" options="{'no_open': True}"/>
+                            <field name="currency_id" column_invisible="1"/>
+                            <field name="quantity" required="1"/>
+                            <field name="price_unit" required="1"/>
+                            <field name="tax_id" widget="many2one"/>
+                            <field name="subtotal" readonly="1" force_save="1" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+            <xpath expr="//page[@name='internal_notes']" position="after">
+                <page string="Transactions" name="transactions" groups="base.group_system">
+                    <group>
+                        <field name="transaction_info" widget="json"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+    <record id="view_crm_lead_kanban_inherit" model="ir.ui.view">
+        <field name="name">crm.lead.kanban.inherit</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_case_kanban_view_leads"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='expected_revenue']" position="replace">
+                <field name="expected_revenue" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                <field name="currency_id" invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="view_crm_lead_list_inherit" model="ir.ui.view">
+        <field name="name">crm.lead.list.inherit</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_case_tree_view_oppor"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='expected_revenue']" position="replace">
+                <field name="expected_revenue" sum="Expected Revenues" optional="show" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                <field name="currency_id" invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="quick_create_opportunity_form_inherit" model="ir.ui.view">
+        <field name="name">crm.lead.form.quick_create.inherit</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.quick_create_opportunity_form"/>
+        <field name="arch" type="xml">
+            <field name="phone" position="after">
+                <field name="crm_product_ids" widget="many2many_tags" options="{'no_open': True, 'no_create': True}" />
+            </field>
+        </field>
+    </record>
+</odoo>

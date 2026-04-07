@@ -1,0 +1,8 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_tour_task_template_user,access.tour.task.template.user,model_tour_task_template,base.group_user,1,0,0,0
+access_tour_task_template_project_user,access.tour.task.template.project.user,model_tour_task_template,project.group_project_user,1,1,1,0
+access_tour_task_template_project_manager,access.tour.task.template.project.manager,model_tour_task_template,project.group_project_manager,1,1,1,1
+access_tour_task_template_tag_user,access.tour.task.template.tag.user,model_tour_task_template_tag,base.group_user,1,0,0,0
+access_tour_task_template_tag_project_manager,access.tour.task.template.tag.project.manager,model_tour_task_template_tag,project.group_project_manager,1,1,1,1
+access_export_vat_wizard,access.export.vat.wizard,model_export_vat_wizard,base.group_user,1,1,1,1
+access_create_task_manual_wizard,access.create.task.manual.wizard,model_create_task_manual_wizard,base.group_user,1,1,1,1

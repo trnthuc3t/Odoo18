@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Inherit Project Task Form View -->
+    <record id="view_task_form_inherit_task_template" model="ir.ui.view">
+        <field name="name">project.task.form.inherit.task.template</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="project.view_task_form2"/>
+        <field name="arch" type="xml">
+            <!-- Add buttons in button box -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <!-- Dependencies Button -->
+                <button class="oe_stat_button" 
+                        type="object" 
+                        name="action_view_dependencies"
+                        icon="fa-link"
+                        invisible="not has_dependencies">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Dependencies</span>
+                    </div>
+                </button>
+                
+                <!-- Blocking Button -->
+                <button class="oe_stat_button" 
+                        type="object" 
+                        name="action_view_blocking_tasks"
+                        icon="fa-lock"
+                        invisible="not blocking_task_ids">
+                    <div class="o_stat_info">
+                        <span class="o_stat_text">Blocking</span>
+                    </div>
+                </button>
+            </xpath>
+
+            <xpath expr="//page[@name='task_dependencies']" position="replace">
+                <page name="task_dependencies" string="Blocked By" invisible="not allow_task_dependencies" groups="project.group_project_task_dependencies">
+                    <field name="depend_on_ids"
+                            nolabel="1"
+                            mode="list,kanban"
+                            context="{
+                                'default_project_id': project_id,
+                                'search_view_ref' : 'project.view_task_search_form',
+                                'search_default_project_id': project_id,
+                                'list_view_ref': 'project.open_view_all_tasks_list_view',
+                                'kanban_view_ref': 'project.project_sub_task_view_kanban_mobile',
+                                'closed_X2M_count': closed_depend_on_count,
+                            }"
+                            widget="notebook_task_one2many">
+                        <list editable="bottom" decoration-muted="state in ['1_done','1_canceled']" open_form_view="True">
+                            <field name="allow_milestones" column_invisible="True"/>
+                            <field name="parent_id" column_invisible="True" />
+                            <field name="subtask_count" column_invisible="True"/>
+                            <field name="closed_subtask_count" column_invisible="True"/>
+                            <field name="id" optional="hide" options="{'enable_formatting': False}"/>
+                            <field name="priority" widget="priority" nolabel="1" width="20px"/>
+                            <field name="state" widget="project_task_state_selection" nolabel="1" width="20px"/>
+                            <field name="name" widget="name_with_subtask_count"/>
+                            <field name="project_id" optional="hide" options="{'no_open': 1}" />
+                            <field name="milestone_id"
+                                optional="hide"
+                                context="{'default_project_id': project_id}"
+                                column_invisible="not parent.allow_milestones"
+                                invisible="not allow_milestones"/>
+                            <field name="partner_id" optional="hide" widget="res_partner_many2one" invisible="not project_id"/>
+                            <field name="parent_id" optional="hide" groups="base.group_no_one"/>
+                            <field name="user_ids" widget="many2many_avatar_user" optional="show"/>
+                            <field name="company_id" optional="hide" groups="base.group_multi_company" />
+                            <field name="company_id" column_invisible="True"/>
+                            <field name="date_deadline" invisible="state in ['1_done', '1_canceled']" optional="hide" decoration-danger="date_deadline and date_deadline &lt; current_date"/>
+                            <field name="activity_ids" string="Next Activity" widget="list_activity" optional="hide"/>
+                            <field name="my_activity_date_deadline" string="My Deadline" widget="remaining_days" options="{'allow_order': '1'}" optional="hide"/>
+                            <field name="rating_last_text" string="Rating" decoration-danger="rating_last_text == 'ko'"
+                                decoration-warning="rating_last_text == 'ok'" decoration-success="rating_last_text == 'top'"
+                                class="fw-bold" widget="badge" optional="hide" invisible="rating_last_text == 'none'" column_invisible="True" groups="project.group_project_rating"/>
+                            <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}" optional="hide"/>
+                            <field name="stage_id" optional="hide"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+            
+            <!-- Add Mentor and Manager fields after user_ids -->
+            <xpath expr="//field[@name='user_ids']" position="after">
+                <field name="mentor_id" widget="many2one_avatar_user" 
+                       options="{'no_create': True, 'no_open': True}"/>
+                <field name="manager_id" widget="many2one_avatar_user" 
+                       options="{'no_create': True, 'no_open': True}"/>
+            </xpath>
+
+            <xpath expr="//label[@for='date_deadline']" position="before">
+                <field name="create_date" readonly="1"/>
+                <field name="date_start"/>
+            </xpath>
+            <xpath expr="//field[@name='project_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+                <attribute name="options">{'no_create': True, 'no_open': True}</attribute>
+            </xpath>
+            
+            <!-- Add Dependencies tab -->
+            <xpath expr="//notebook" position="inside">
+                <page string="Dependencies" name="dependencies" invisible="not has_dependencies and not blocking_task_ids">
+                    <group>
+                        <group>
+                            <field name="has_dependencies" invisible="1"/>
+                            <field name="dependencies_completed" readonly="1"/>
+                            <field name="can_start" readonly="1" 
+                                   widget="boolean"
+                                   string="Can Start Task"/>
+                        </group>
+                    </group>
+                    
+                    <group string="This task depends on" invisible="not depend_on_ids">
+                        <field name="depend_on_ids" nolabel="1">
+                            <list>
+                                <field name="name"/>
+                                <field name="user_ids" widget="many2many_avatar_user"/>
+                                <field name="stage_id"/>
+                                <field name="date_deadline"/>
+                            </list>
+                        </field>
+                    </group>
+                    
+                    <group string="Tasks blocked by this task" invisible="not blocking_task_ids">
+                        <field name="blocking_task_ids" nolabel="1">
+                            <list>
+                                <field name="name"/>
+                                <field name="user_ids" widget="many2many_avatar_user"/>
+                                <field name="stage_id"/>
+                                <field name="date_deadline"/>
+                            </list>
+                        </field>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_sale_project_inherit_form_inherit" model="ir.ui.view">
+        <field name="name">project.task.form.inherit.task.template</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="sale_project.view_sale_project_inherit_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='sale_line_div']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//label[@for='sale_line_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="project_task_view_tree_main_base_inherit" model="ir.ui.view">
+        <field name="name">project.task.view.tree.main.base.inherit</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="project.project_task_view_tree_main_base"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='stage_id']" position="attributes">
+                <attribute name="context">{}</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="project.action_view_my_task" model="ir.actions.act_window">
+        <field name="context">{
+            'all_task': 0,
+            'default_user_ids': [(4, uid)],
+            'sale_show_partner_name': True,
+        }</field>
+    </record>
+    <record id="project.action_view_all_task" model="ir.actions.act_window">
+        <field name="context">{'all_task': 0, 'default_user_ids': [(4, uid)], 'sale_show_partner_name': True}</field>
+    </record>
+
+    <record id="project.view_task_kanban_inherit_my_task" model="ir.ui.view">
+        <field name="active" eval="False"/>
+    </record>
+
+    <record id="project.act_project_project_2_project_task_all" model="ir.actions.act_window">
+        <field name="context">{
+            'active_model': 'project.project',
+            'default_project_id': active_id,
+            'show_project_update': True
+        }</field>
+    </record>
+
+    
+    <!-- Inherit Project Task Tree View -->
+    <!-- <record id="view_task_tree_inherit_task_template" model="ir.ui.view">
+        <field name="name">project.task.tree.inherit.task.template</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="project.view_task_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='user_ids']" position="after">
+                <field name="mentor_id" widget="many2one_avatar_user" optional="hide"/>
+                <field name="manager_id" widget="many2one_avatar_user" optional="hide"/>
+                <field name="can_start" optional="hide" 
+                       widget="boolean"
+                       decoration-success="can_start == True"
+                       decoration-danger="can_start == False"/>
+            </xpath>
+        </field>
+    </record> -->
+
+    <!-- Inherit Project Task Kanban View -->
+    <record id="view_task_kanban_inherit_task_template" model="ir.ui.view">
+        <field name="name">project.task.kanban.inherit.task.template</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="project.view_task_kanban"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='user_ids']" position="after">
+                <field name="mentor_id"/>
+                <!-- <field name="can_start"/>
+                <field name="has_dependencies"/> -->
+            </xpath>
+        </field>
+    </record>
+
+    <record id="task_type_tree_inherit_usable" model="ir.ui.view">
+        <field name="name">project.task.type.tree.inherit.usable</field>
+        <field name="model">project.task.type</field>
+        <field name="inherit_id" ref="project.task_type_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='fold']" position="after">
+                <field name="is_usable"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

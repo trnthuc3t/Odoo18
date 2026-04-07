@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- View for readonly sale order line form -->
+    <record id="view_sale_order_line_form_travel_itinerary" model="ir.ui.view">
+        <field name="name">sale.order.line.form.travel.itinerary</field>
+        <field name="model">sale.order.line</field>
+        <field name="inherit_id" ref="sale.sale_order_line_view_form_readonly"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='product_id']" position="after">
+                <field name="has_travel_itinerary" invisible="1"/>
+            </xpath>
+            <xpath expr="//field[@name='name']" position="after">
+                <button name="action_view_detail_information" type="object" class="btn btn-link" string="📋 Detail Information" icon="fa-info-circle" invisible="not has_travel_itinerary"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- View for editable sale order line form -->
+    <record id="view_sale_order_line_form_editable_travel_itinerary" model="ir.ui.view">
+        <field name="name">sale.order.line.form.editable.travel.itinerary</field>
+        <field name="model">sale.order.line</field>
+        <field name="inherit_id" ref="sale_project.sale_order_line_view_form_editable"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='product_id']" position="after">
+                <field name="has_travel_itinerary" invisible="1"/>
+            </xpath>
+            <xpath expr="//field[@name='name']" position="after">
+                <button name="action_view_detail_information" type="object" class="btn btn-link" string="📋 Detail Information" icon="fa-info-circle" invisible="not has_travel_itinerary"/>
+            </xpath>
+        </field>
+    </record>
+
+
+    <!-- View for sale order form (tree view of lines) -->
+    <record id="view_order_form_inherit_detail" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.detail</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='order_line']/list//field[@name='product_uom_qty']" position="before">
+                <field name="has_travel_itinerary" column_invisible="1"/>
+                <button name="action_view_detail_information" type="object" icon="fa-info-circle" title="Detail Information" invisible="not has_travel_itinerary"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
+

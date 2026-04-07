@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_order_form_inherit_project_tasks" model="ir.ui.view">
+        <field name="name">view.order.form.inherit.project.tasks</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_view_invoice']" position="before">
+                <button name="tour_action_view_project" type="object" 
+                        string="Project Tasks" 
+                        class="btn-primary" 
+                        icon="fa-tasks"
+                        invisible="not project_id">
+                        <field string="Project Tasks" name="task_count" widget="statinfo"/>
+                </button>
+            </xpath>
+            <xpath expr="//button[@name='action_quotation_send']" position="before">
+                <button name="action_create_project_tasks_when_missing_info" type="object" 
+                        string="Create Project" 
+                        class="btn-primary" 
+                         icon="fa-plus"
+                        invisible="not is_missing_info or project_id">
+                </button>
+            </xpath>
+            <xpath expr="//field[@name='has_active_pricelist']" position="before">
+                <field name="commitment_date" required="1" string="Delivery Date"/>
+            </xpath>     
+            <xpath expr="//notebook" position="after">
+                <notebook>
+                    <page string="Project Tasks" invisible="not project_id">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <button name="action_manual_create_task" type="object" 
+                                        string="Create Task Manually" 
+                                        class="btn-primary"
+                                        icon="fa-plus"/>
+                            </div>
+                            <div class="d-flex align-items-center gap-2" groups="base.group_system">
+                                <button name="show_hide_tasks" type="object" 
+                                        string="Show Owner Tasks Only" 
+                                        class="btn-secondary"
+                                        icon="fa-eye-slash"
+                                        invisible="not show_tasks"/>
+                                <button name="show_hide_tasks" type="object"
+                                        string="Show Other Tasks"
+                                        class="btn-secondary"
+                                        icon="fa-eye"
+                                        invisible="show_tasks"/>
+                            </div>
+                        </div>
+                        <field name="task_ids" readonly="1" nolabel="1">
+                            <list>
+                                <field name="name"/>
+                                <field name="create_date"/>
+                                <field name="date_start"/>
+                                <field name="date_deadline"/>
+                                <field name="user_ids" widget="many2many_avatar_user"/>
+                                <field name="stage_id" domain="[]"/>
+                            </list>
+                        </field>
+                    </page>
+                </notebook>
+            </xpath>
+            <!-- <xpath expr="//group[@name='note_group']" position="after">
+                <group name="sale_extend_1">
+                    <field name="is_missing_info" widget="boolean_button"/>
+                    <field name="is_export_vat" widget="boolean_toggle"/>
+                </group>
+            </xpath> -->
+            <xpath expr="//group[@name='note_group']" position="after">
+                <group name="sale_extend_1">
+                    <button name="request_export_vat" type="object" 
+                            string="Request Export VAT" 
+                            class="btn-secondary"
+                            invisible="is_export_vat"/>
+                </group>
+            </xpath>
+            <xpath expr="//field[@name='require_signature']" position="before">
+                <field name="is_missing_info" widget="boolean_toggle"/>
+                <field name="is_export_vat" widget="boolean" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add Detail Information to Portal Order Line -->
+    <template id="portal_order_page_inherit_detail" name="Portal Order Page - Detail Information" inherit_id="sale.sale_order_portal_content">
+        <xpath expr="//td[@id='product_name']" position="after">
+            <td class="text-center" style="width: 50px;">
+                <t t-if="line.product_id.product_tmpl_id.detail_information">
+                    <button type="button" 
+                            class="btn btn-sm btn-link p-0" 
+                            data-bs-toggle="modal" 
+                            t-attf-data-bs-target="#detailInfoModal{{line.id}}">
+                        <i class="fa fa-info-circle fa-lg text-primary" title="View Detail Information"></i>
+                    </button>
+                    
+                    <!-- Modal for Detail Information -->
+                    <div class="modal fade" t-attf-id="detailInfoModal{{line.id}}" tabindex="-1" role="dialog">
+                        <div class="modal-dialog modal-lg" role="document">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">
+                                        <i class="fa fa-info-circle text-primary"></i>
+                                        Detail Information
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <h6 class="text-muted mb-3" t-field="line.product_id.name"/>
+                                    <div t-field="line.product_id.product_tmpl_id.detail_information" 
+                                         class="oe_structure"
+                                         style="text-align: left;"/>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+            </td>
+        </xpath>
+        
+        <!-- Add header for the info column -->
+        <xpath expr="//th[@id='product_name_header']" position="after">
+            <th class="text-center" style="width: 50px;">Info</th>
+        </xpath>
+    </template>
+
+    <!-- Fix Subtotal = 0 for combo multiple choice -->
+    <template id="portal_combo_multiple_choice_subtotal_fix"
+              name="Portal Order - Combo Multiple Choice Subtotal Fix"
+              inherit_id="sale.sale_order_portal_content">
+        <!--
+            Thay thế Subtotal row để xử lý combo multiple choice (display_type='line_note'):
+            - Ẩn Subtotal row sau dòng combo parent (vì current_subtotal đã bị reset về 0)
+            - Thêm trigger hiển thị Subtotal sau dòng line_note của combo mc
+            - Hiển thị price_subtotal của combo cha thay vì current_subtotal=0
+        -->
+        <xpath expr="//tr[hasclass('is-subtotal')]" position="replace">
+            <tr t-if="current_section and (
+                    line_last
+                    or lines_to_report[line_index+1].display_type == 'line_section'
+                    or lines_to_report[line_index+1].product_type == 'combo'
+                    or (
+                        line.combo_item_id
+                        and not lines_to_report[line_index+1].combo_item_id
+                    )
+                    or (
+                        line.display_type == 'line_note'
+                        and line.linked_line_id
+                        and line.linked_line_id.product_template_id.is_combo_multiple_choice
+                    )
+                ) and not line.is_downpayment
+                and not (line.product_type == 'combo' and line.product_template_id.is_combo_multiple_choice)"
+                class="is-subtotal text-end"
+            >
+                <t t-set="current_section" t-value="None"/>
+                <td colspan="99">
+                    <strong class="mr16">Subtotal</strong>
+                    <span t-if="line.display_type == 'line_note' and line.linked_line_id and line.linked_line_id.product_template_id.is_combo_multiple_choice"
+                          t-out="sum(item.price_subtotal for item in line.linked_line_id.linked_line_ids if item.combo_item_id)"
+                          t-options='{"widget": "monetary", "display_currency": sale_order.currency_id}'/>
+                    <span t-else=""
+                          t-out="current_subtotal"
+                          t-options='{"widget": "monetary", "display_currency": sale_order.currency_id}'/>
+                </td>
+            </tr>
+        </xpath>
+    </template>
+
+    <!-- Fix Subtotal for combo multiple choice in PDF report (sale.report_saleorder_document) -->
+    <template id="report_saleorder_combo_mc_subtotal_fix"
+              name="Sale Order PDF Report - Combo Multiple Choice Subtotal Fix"
+              inherit_id="sale.report_saleorder_document">
+        <!--
+            PDF template dùng logic khác portal:
+            - <t t-if> nằm ngoài <tr> nên current_section được set trước khi render row
+            - Cần: ẩn subtotal sau combo mc parent, ẩn subtotal sau product lẻ khi current_section là combo mc,
+              chỉ fire subtotal sau line_note của combo mc và dùng tổng item children thay vì current_subtotal=0
+        -->
+        <xpath expr="//t[tr[hasclass('is-subtotal')]]" position="replace">
+            <t t-if="current_section and (
+                    (
+                        not (current_section.product_type == 'combo' and current_section.product_template_id.is_combo_multiple_choice)
+                        and (
+                            line_last
+                            or lines_to_report[line_index+1].display_type == 'line_section'
+                            or lines_to_report[line_index+1].product_type == 'combo'
+                            or (
+                                line.combo_item_id
+                                and not lines_to_report[line_index+1].combo_item_id
+                            )
+                        )
+                    )
+                    or (
+                        line.display_type == 'line_note'
+                        and line.linked_line_id
+                        and line.linked_line_id.product_template_id.is_combo_multiple_choice
+                    )
+                ) and not line.is_downpayment
+                and not (line.product_type == 'combo' and line.product_template_id.is_combo_multiple_choice)"
+            >
+                <t t-set="current_section" t-value="None"/>
+                <tr class="is-subtotal text-end">
+                    <td name="td_section_subtotal" colspan="99">
+                        <strong class="mr16">Subtotal</strong>
+                        <span t-if="line.display_type == 'line_note' and line.linked_line_id and line.linked_line_id.product_template_id.is_combo_multiple_choice"
+                              t-out="sum(item.price_subtotal for item in line.linked_line_id.linked_line_ids if item.combo_item_id)"
+                              t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
+                        <span t-else=""
+                              t-out="current_subtotal"
+                              t-options='{"widget": "monetary", "display_currency": doc.currency_id}'/>
+                    </td>
+                </tr>
+            </t>
+        </xpath>
+    </template>
+
+    <!-- Hide Pay Now and Sign & Pay buttons, keep only Accept & Sign -->
+    <template id="sale_order_portal_disable_payment_options" name="Portal - Disable Payment Options" inherit_id="sale.sale_order_portal_template">
+        <!-- Fix sidebar button: only show when signature is needed -->
+        <xpath expr="//div[@id='sale_order_sidebar_button']" position="replace">
+            <div class="d-flex flex-column gap-2" id="sale_order_sidebar_button">
+                <a t-if="sale_order._has_to_be_signed()" role="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalaccept" href="#">
+                    <i class="fa fa-check"/> Accept &amp; Sign
+                </a>
+                <div class="o_download_pdf d-flex gap-2 flex-lg-column flex-xl-row flex-wrap">
+                    <a class="btn btn-light o_print_btn o_portal_invoice_print flex-grow-1" t-att-href="sale_order.get_portal_url(report_type='pdf')" id="print_invoice_report" title="View Details" role="button" target="_blank"><i class="fa fa-print me-1"/>View Details</a>
+                </div>
+            </div>
+        </xpath>
+
+        <!-- Hide navspy navigation menu -->
+        <xpath expr="//div[hasclass('navspy')]" position="attributes">
+            <attribute name="style">display: none !important;</attribute>
+        </xpath>
+
+        <!-- Hide payment form in modal but keep modal structure for JavaScript callback -->
+        <xpath expr="//div[@id='payment_method']" position="attributes">
+            <attribute name="style">display: none !important;</attribute>
+        </xpath>
+
+        <!-- Override bottom actions: show only Accept &amp; Sign for signature, hide Pay Now -->
+        <xpath expr="//div[@name='sale_order_actions']" position="replace">
+            <div t-if="sale_order._has_to_be_signed()" class="d-flex justify-content-center gap-1 d-print-none" name="sale_order_actions">
+                <div class="col-sm-auto mt8">
+                    <a role="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalaccept" href="#"><i class="fa fa-check"/> Accept &amp; Sign</a>
+                </div>
+                <div class="col-sm-auto mt8">
+                    <a role="button" class="btn btn-light" href="#discussion"><i class="fa fa-comment"/> Feedback</a>
+                </div>
+                <div class="col-sm-auto mt8">
+                    <a role="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#modaldecline" href="#"> <i class="fa fa-times"/> Reject</a>
+                </div>
+            </div>
+        </xpath>
+    </template>
+</odoo>

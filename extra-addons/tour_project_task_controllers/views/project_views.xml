@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="edit_project_inherit_project_tasks" model="ir.ui.view">
+        <field name="name">edit.project.project.inherit.project.tasks</field>
+        <field name="model">project.project</field>
+        <field name="inherit_id" ref="project.edit_project"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="before">
+                <notebook>
+                    <page string="Tasks" invisible="not task_ids">
+                        <div class="d-flex justify-content-end align-items-center mb-2" groups="base.group_system">
+                            <button name="show_hide_tasks" type="object"
+                                    string="Show Owner Tasks Only"
+                                    class="btn-secondary"
+                                    icon="fa-eye-slash"
+                                    invisible="not show_tasks"/>
+                            <button name="show_hide_tasks" type="object"
+                                    string="Show Other Tasks"
+                                    class="btn-secondary"
+                                    icon="fa-eye"
+                                    invisible="show_tasks"/>
+                        </div>
+                        <field name="show_tasks" invisible="1" groups="base.group_system"/>
+                        <field name="task_user_ids" nolabel="1">
+                            <list>
+                                <field name="name"/>
+                                <field name="create_date"/>
+                                <field name="date_start"/>
+                                <field name="date_deadline"/>
+                                <field name="user_ids" widget="many2many_avatar_user"/>
+                                <field name="stage_id" domain="[]"/>
+                            </list>
+                        </field>
+                    </page>
+                </notebook>
+            </xpath>
+            <xpath expr="//field[@name='company_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+                <attribute name="options">{'no_create': True, 'no_open': True}</attribute>
+            </xpath>
+            <xpath expr="//field[@name='alias_name']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//label[@for='alias_name']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='alias_domain_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='sale_line_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//span[@class='oe_edit_only o_row']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//group[@name='group_tasks_managment']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='partner_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='label_tasks']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+        </field>
+    </record>
+    
+    <record id="project_view_project_kanban_open_form" model="ir.ui.view">
+        <field name="name">project.project.kanban.open.form</field>
+        <field name="model">project.project</field>
+        <field name="inherit_id" ref="project.view_project_kanban"/>
+        <field name="arch" type="xml">
+            <xpath expr="//kanban" position="attributes">
+                <attribute name="type">open</attribute>
+                <attribute name="action"></attribute>
+            </xpath>
+        </field>
+    </record>
+
+
+    <record id="view_edit_project_inherit_form_inherit_project_tasks" model="ir.ui.view">
+        <field name="name">view.edit.project.project.inherit.project.tasks</field>
+        <field name="model">project.project</field>
+        <field name="inherit_id" ref="sale_project.view_edit_project_inherit_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='reinvoiced_sale_order_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='sale_line_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//group[@name='group_sales_invoicing']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>
