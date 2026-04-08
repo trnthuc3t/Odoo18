@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="tour_accounting.vietqr_payment_form" inherit_id="payment.state_header">
+        <xpath expr="//div[@name='o_payment_status_alert']" position="inside">
+            <t t-if="tx.provider_id.sudo().code == 'custom'">
+                <!-- Custom CSS for enhanced styling -->
+                <style>
+                    .payment-footer {
+                            font-size: 15px;
+                            margin-bottom: -10px;
+                            box-shadow: 0 2px 12px rgba(0,0,0,0.03) inset;
+                        }
+                    .payment-footer strong {
+                        color: #28a745;
+                    }
+                    .payment-footer i {
+                        color: #20c997;
+                    }
+                    .payment-container {
+                        background: white;
+                        border-radius: 20px;
+                        padding: 30px;
+                        margin: 20px 0;
+                        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+                        color: black;
+                    }
+                    .qr-section {
+                        background: white;
+                        border-radius: 15px;
+                        padding: 25px;
+                        margin: 20px 0;
+                        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+                    }
+                    .instruction-card {
+                        background: rgba(255, 255, 255, 0.95);
+                        border-radius: 15px;
+                        padding: 20px;
+                        margin: 15px 0;
+                        color: #333;
+                        border-left: 5px solid #28a745;
+                    }
+                    .step-number {
+                        background: #28a745;
+                        color: black;
+                        width: 30px;
+                        height: 30px;
+                        border-radius: 50%;
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-weight: bold;
+                        margin-right: 15px;
+                    }
+                    .payment-info {
+                        background: rgba(255, 255, 255, 0.1);
+                        border-radius: 10px;
+                        padding: 15px;
+                        margin: 15px 0;
+                        backdrop-filter: blur(10px);
+                    }
+                    .confirm-btn {
+                        background: linear-gradient(45deg, #28a745, #20c997);
+                        border: none;
+                        padding: 15px 40px;
+                        border-radius: 50px;
+                        font-size: 16px;
+                        font-weight: bold;
+                        box-shadow: 0 8px 20px rgba(40, 167, 69, 0.3);
+                        transition: all 0.3s ease;
+                    }
+                    .confirm-btn:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 12px 25px rgba(40, 167, 69, 0.4);
+                    }
+                    .security-badge {
+                        background: rgba(255, 255, 255, 0.2);
+                        border-radius: 25px;
+                        padding: 8px 15px;
+                        font-size: 12px;
+                        display: inline-block;
+                        margin: 10px 5px;
+                    }
+                </style>
+
+                <div class="payment-container">
+                    <div class="text-center mb-4">
+                        <h3 class="mb-3">
+                            <i class="fa fa-shield-alt mr-2"></i>
+                            Vietnam Tour QR thanh toán
+                        </h3>
+                    </div>
+
+                    <!-- Payment Information -->
+                    <div class="payment-info">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Số tiền:</strong> <span t-esc="tx.get_vnd_amount_format(tx.amount)"/>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Mã giao dịch:</strong> <span t-esc="tx._get_communication()"/>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Instructions -->
+                    <div class="instruction-card">
+                        <h5 class="mb-3 text-primary">
+                            <i class="fa fa-info-circle mr-2"></i>
+                            Hướng dẫn thanh toán
+                        </h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="step-number">1</div>
+                                    <div>
+                                        <strong>Mở ứng dụng ngân hàng</strong><br/>
+                                        <small class="text-muted">Sử dụng ứng dụng Mobile Banking của bạn</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="step-number">3</div>
+                                    <div>
+                                        <strong>Kiểm tra thông tin</strong><br/>
+                                        <small class="text-muted">Xác nhận số tiền và nội dung chuyển khoản</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="step-number">2</div>
+                                    <div>
+                                        <strong>Quét mã QR</strong><br/>
+                                        <small class="text-muted">Chọn chức năng quét QR để thanh toán</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="step-number">4</div>
+                                    <div>
+                                        <strong>Xác nhận thanh toán</strong><br/>
+                                        <small class="text-muted">Hoàn tất giao dịch và nhấn nút xác nhận bên dưới</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- QR Code Section -->
+                    <div class="qr-section text-center">
+                        <h5 class="text-dark mb-3">
+                            <i class="fa fa-qrcode mr-2"></i>
+                            Quét mã QR để thanh toán
+                        </h5>
+                        <div class="d-inline-block position-relative">
+                            <img class="img-fluid" style="max-width: 100%; height: auto; border-radius: 10px;"
+                                 t-att-src="'https://img.vietqr.io/image/%s-%s-compact.jpg?amount=%s&amp;addInfo=%s&amp;accountName=%s' % (tx.provider_id.sudo().bank_name,tx.provider_id.sudo().bank_account_number,tx.amount,tx._get_communication(),tx.provider_id.sudo().bank_account_holder)"/>
+                        </div>
+                        
+                        <!-- Bank Info -->
+                        <div class="mt-4 p-3" style="background: #f8f9fa; border-radius: 10px;">
+                            <div class="row text-dark">
+                                <div class="col-md-4">
+                                    <small class="text-muted">Ngân hàng</small><br/>
+                                    <strong t-esc="tx.provider_id.sudo().bank_name"/>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">Số tài khoản</small><br/>
+                                    <strong t-esc="tx.provider_id.sudo().bank_account_number"/>
+                                </div>
+                                <div class="col-md-4">
+                                    <small class="text-muted">Chủ tài khoản</small><br/>
+                                    <strong t-esc="tx.provider_id.sudo().bank_account_holder"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Confirmation Section -->
+                    <div class="text-center mt-4" t-if="tx.state == 'draft'">
+                        <div class="alert alert-warning mb-4" style="background: rgba(255, 193, 7, 0.2); border: 2px dashed #ffc107; color: black;">
+                            <i class="fa fa-exclamation-triangle mr-2"></i>
+                            <strong>Khuyến nghị:</strong> Sau khi hoàn tất chuyển khoản, bạn có thể "Tiếp tục đến hóa đơn" bên dưới. Mỗi mã QR chỉ sử dụng một lần.
+                        </div>
+                        <a t-att-href="tx.landing_route" class="btn btn-success confirm-btn">
+                            <i class="fa fa-check-circle mr-2"></i> Tiếp tục đến hóa đơn
+                        </a>
+                        <div class="mt-3">
+                            <div class="alert alert-info" style="background: rgba(23, 162, 184, 0.15); border-left: 5px solid #17a2b8; color: #0c5460; border-radius: 8px; padding: 12px 18px;">
+                                <i class="fa fa-clock mr-2"></i>
+                                <small>
+                                    Bạn sẽ nhận được thông báo xác nhận thanh toán sớm nhất sau khi chúng tôi kiểm tra giao dịch.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Support Section (Footer) -->
+                    <div class="text-center mt-4 payment-footer" style="border-top: 1px solid #e9ecef; background: #f8f9fa; border-radius: 0 0 20px 20px;">
+                        <p class="mb-2" style="color: #495057;">
+                            <i class="fa fa-headset mr-2"></i>
+                            Cần hỗ trợ? Liên hệ hotline: <strong t-esc="tx.provider_id.sudo().get_company_phone()"/>
+                        </p>
+                        <p class="mb-0" style="color: #495057;">
+                            <i class="fa fa-envelope mr-2"></i>
+                            Email: <strong t-esc="tx.provider_id.sudo().get_company_email()"/>
+                        </p>
+                    </div>
+                </div>
+                <!-- <div class="text-center mt-3" t-if="tx.state == 'pending'">
+                    <div class="payment-container">
+                        <div class="alert alert-success" style="background: rgba(40, 167, 69, 0.2); border: 2px solid #28a745;">
+                            <i class="fa fa-check-circle fa-3x mb-3 text-success"></i>
+                            <h4 class="text-success mb-3">Thanh toán thành công!</h4>
+                            <p class="mb-3">Cảm ơn bạn đã thanh toán. Hệ thống đang xử lý đơn hàng của bạn.</p>
+                        </div>
+                        <a t-att-href="tx.landing_route" class="btn btn-primary confirm-btn">
+                            <i class="fa fa-arrow-right mr-2"></i> Tiếp tục đến hóa đơn
+                        </a>
+                    </div>
+                </div> -->
+            </t>
+        </xpath>
+    </template>
+
+</odoo>

@@ -1,0 +1,56 @@
+<odoo>
+    <!-- Action for N8N Webhook -->
+    <record id="action_n8n_webhook" model="ir.actions.act_window">
+        <field name="name">N8N Webhooks</field>
+        <field name="res_model">n8n.webhook</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first N8N Webhook
+            </p>
+        </field>
+    </record>
+
+    <!-- Menu Item: N8N Webhook, placed after base.menu_users -->
+    <menuitem id="menu_n8n_webhook_root"
+              name="N8N Webhooks"
+              parent="base_setup.menu_config"
+              action="tour_n8n_connector.action_n8n_webhook"
+              sequence="100"/>
+
+    <!-- Tree View -->
+    <record id="view_n8n_webhook_tree" model="ir.ui.view">
+        <field name="name">n8n.webhook.tree</field>
+        <field name="model">n8n.webhook</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="short_name"/>
+                <field name="hook_url"/>
+                <field name="hook_url_secret_key"/>
+                <field name="hook_header_key"/>
+                <field name="is_active"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_n8n_webhook_form" model="ir.ui.view">
+        <field name="name">n8n.webhook.form</field>
+        <field name="model">n8n.webhook</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="short_name"/>
+                        <field name="hook_url"/>
+                        <field name="hook_url_secret_key" password="True"/>
+                        <field name="hook_header_key"/>
+                        <field name="is_active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+</odoo>

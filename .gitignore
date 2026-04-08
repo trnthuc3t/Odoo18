@@ -7,3 +7,4 @@ extra-addons/muk_web_dialog
 __pycache__/
 *.pyc
 *.pyo
+nul

@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_lark_message_hook,lark.message.hook access,model_lark_message_hook,base.group_system,1,1,1,0
+access_lark_web_hook,lark.web.hook access,model_lark_web_hook,base.group_system,1,1,1,0

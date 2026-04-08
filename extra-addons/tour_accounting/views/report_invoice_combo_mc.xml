@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Override account.report_invoice_document để ẩn các dòng sản phẩm con
+        của combo multiple choice và hiển thị Subtotal đúng.
+
+        Cấu trúc invoice lines sau khi từ SO combo mc chuyển sang invoice:
+          1. line_section  ← combo parent (display_type='line_section')
+          2. line_note     ← nhãn combo mc (display_type='line_note')
+          3. product lines ← combo items (bị ẩn bởi _get_invoice_lines_to_show)
+
+        is_combo_mc_label và combo_mc_subtotal được tính bằng AccountMoveLine.
+    -->
+    <template id="report_invoice_document_combo_mc_fix"
+              name="Invoice Report - Combo Multiple Choice Fix"
+              inherit_id="account.report_invoice_document">
+
+        <!-- 1. Thay thế dòng lấy lines bằng method đã lọc sẵn combo mc items -->
+        <xpath expr="//t[@t-set='lines']" position="replace">
+            <t t-set="lines" t-value="o._get_invoice_lines_to_show()"/>
+        </xpath>
+
+        <!-- 2. Thay thế Subtotal row:
+             - Ẩn Subtotal sau line_section của combo mc (current_subtotal = 0 vì items bị ẩn)
+             - Fire Subtotal sau line_note của combo mc, dùng combo_mc_subtotal
+             - Giữ nguyên behavior với section thường
+        -->
+        <xpath expr="//t[tr[hasclass('is-subtotal')]]" position="replace">
+            <t t-if="current_section and (
+                    (
+                        not any(sol.product_template_id.is_combo_multiple_choice for sol in current_section.sale_line_ids)
+                        and (line_last or lines[line_index+1].display_type == 'line_section')
+                    )
+                    or line.is_combo_mc_label
+                )"
+            >
+                <t t-set="current_section" t-value="None"/>
+                <tr class="is-subtotal text-end">
+                    <td colspan="99">
+                        <strong class="mr16">Subtotal</strong>
+                        <span t-if="line.is_combo_mc_label"
+                              t-out="line.combo_mc_subtotal"
+                              t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                        <span t-else=""
+                              t-out="current_subtotal"
+                              t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                    </td>
+                </tr>
+            </t>
+        </xpath>
+    </template>
+</odoo>

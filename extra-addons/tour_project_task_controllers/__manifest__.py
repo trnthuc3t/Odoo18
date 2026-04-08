@@ -22,7 +22,6 @@
         "mail",
         "resource",
         "tour_project",
-        "tour_base",
         "tour_lark_connector",
         "tour_n8n_connector",
     ],
