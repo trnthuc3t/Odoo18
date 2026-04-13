@@ -1,0 +1,15 @@
+<odoo>
+    <record id="view_users_form_api_key" model="ir.ui.view">
+        <field name="name">res.users.form.api.key</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form[1]/sheet[1]" position="inside">
+                <group string="API Configuration" name="api_config">
+                    <field name="api_key" string="API Key" password="1"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

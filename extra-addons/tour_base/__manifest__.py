@@ -6,9 +6,14 @@
     "category": "Base",
     "author": "thuctt",
     "depends": [
-        "base"
+        "base",
+        "portal",
+        "auth_signup"
     ],
-    "assets": {},
+    "data": [
+        "security/ir.model.access.csv",
+        "views/res_users_views.xml",
+    ],
     "application": True,
     "installable": True,
     "license": "LGPL-3"
