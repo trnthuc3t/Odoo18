@@ -228,6 +228,103 @@ class AuthPortalController(http.Controller):
             }
         })
 
+    # PRODUCTS - LIST
+
+    @http.route('/api/products', type='http', auth='public', methods=['GET'], csrf=False)
+    def get_products(self, **kwargs):
+        try:
+            limit = int(kwargs.get('limit', 20))
+            offset = int(kwargs.get('offset', 0))
+            search = (kwargs.get('search') or '').strip()
+
+            limit = min(max(limit, 1), 100)
+
+            domain = [('sale_ok', '=', True)]
+            if search:
+                domain.append(('name', 'ilike', f'%{search}%'))
+
+            Product = request.env['product.template'].sudo()
+            total = Product.search_count(domain)
+            products = Product.search(domain, limit=limit, offset=offset)
+
+            items = []
+            for p in products:
+                items.append({
+                    'id': p.id,
+                    'name': p.name,
+                    'default_code': p.default_code or '',
+                    'list_price': p.list_price,
+                    'currency': p.currency_id.name if p.currency_id else 'VND',
+                    'description': p.description_sale or '',
+                    'image_url': f'/web/image/product.template/{p.id}/image_1920/300x300' if p.image_1920 else '',
+                    'type': p.type or 'consu',
+                })
+
+            return _make_response({
+                'code': 200,
+                'message': 'Lay danh sach san pham thanh cong',
+                'response': {
+                    'products': items,
+                    'total': total,
+                    'limit': limit,
+                    'offset': offset,
+                }
+            })
+        except Exception as e:
+            _logger.error("Error getting products: %s", str(e))
+            return _make_response({'code': 500, 'message': 'Khong the lay danh sach san pham', 'response': None}, 500)
+
+    # PRODUCTS - DETAIL
+
+    @http.route('/api/products/<int:product_id>', type='http', auth='public', methods=['GET'], csrf=False)
+    def get_product_detail(self, product_id):
+        """Lay chi tiet 1 san pham."""
+        try:
+            product = request.env['product.template'].sudo().browse(product_id)
+            if not product.exists() or not product.sale_ok:
+                return _make_response({'code': 404, 'message': 'San pham khong ton tai', 'response': None}, 404)
+
+            combos = []
+            for combo in product.combo_ids:
+                combo_items = []
+                for item in combo.combo_item_ids:
+                    combo_items.append({
+                        'id': item.id,
+                        'product_id': item.product_id.id,
+                        'product_name': item.product_id.display_name,
+                        'extra_price': item.extra_price,
+                        'fixed_price': item.fixed_price,
+                        'min_quantity': item.min_quantity,
+                        'max_quantity': item.max_quantity,
+                        'shared_cost_enabled': item.shared_cost_enabled,
+                    })
+                combos.append({
+                    'id': combo.id,
+                    'name': combo.name,
+                    'items': combo_items,
+                })
+
+            return _make_response({
+                'code': 200,
+                'message': 'OK',
+                'response': {
+                    'product': {
+                        'id': product.id,
+                        'name': product.name,
+                        'default_code': product.default_code or '',
+                        'list_price': product.list_price,
+                        'currency': product.currency_id.name if product.currency_id else 'VND',
+                        'description': product.description_sale or '',
+                        'image_url': f'/web/image/product.template/{product.id}/image_1920/600x600' if product.image_1920 else '',
+                        'type': product.type or 'consu',
+                    },
+                    'combos': combos,
+                }
+            })
+        except Exception as e:
+            _logger.error("Error getting product detail: %s", str(e))
+            return _make_response({'code': 500, 'message': 'Khong the lay chi tiet san pham', 'response': None}, 500)
+
     # AUTH - SET API KEY (admin only)
 
     @http.route('/api/auth/api-key/set', type='http', auth='user', methods=['POST'], csrf=False)
