@@ -256,6 +256,7 @@ class AuthPortalController(http.Controller):
                     'list_price': p.list_price,
                     'currency': p.currency_id.name if p.currency_id else 'VND',
                     'description': p.description_sale or '',
+                    'detail_information': getattr(p, 'detail_information', '') or '',
                     'image_url': f'/web/image/product.template/{p.id}/image_1920/300x300' if p.image_1920 else '',
                     'type': p.type or 'consu',
                 })
@@ -315,6 +316,7 @@ class AuthPortalController(http.Controller):
                         'list_price': product.list_price,
                         'currency': product.currency_id.name if product.currency_id else 'VND',
                         'description': product.description_sale or '',
+                        'detail_information': getattr(product, 'detail_information', '') or '',
                         'image_url': f'/web/image/product.template/{product.id}/image_1920/600x600' if product.image_1920 else '',
                         'type': product.type or 'consu',
                     },
