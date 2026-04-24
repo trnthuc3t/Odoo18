@@ -249,6 +249,7 @@ class AuthPortalController(http.Controller):
 
             items = []
             for p in products:
+                is_combo = (p.type == 'combo')
                 items.append({
                     'id': p.id,
                     'name': p.name,
@@ -259,6 +260,10 @@ class AuthPortalController(http.Controller):
                     'detail_information': getattr(p, 'detail_information', '') or '',
                     'image_url': f'/web/image/product.template/{p.id}/image_1920/300x300' if p.image_1920 else '',
                     'type': p.type or 'consu',
+                    'is_combo': is_combo,
+                    'is_combo_multiple_choice': bool(getattr(p, 'is_combo_multiple_choice', False)) if is_combo else False,
+                    'is_day_tour': bool(getattr(p, 'is_day_tour', False)) if is_combo else False,
+                    'has_combos': bool(p.combo_ids) if is_combo else False,
                 })
 
             return _make_response({
@@ -291,10 +296,12 @@ class AuthPortalController(http.Controller):
                 for item in combo.combo_item_ids:
                     combo_items.append({
                         'id': item.id,
+                        'combo_item_id': item.id,
                         'product_id': item.product_id.id,
                         'product_name': item.product_id.display_name,
                         'extra_price': item.extra_price,
                         'fixed_price': item.fixed_price,
+                        'quantity': item.quantity or 1.0,
                         'min_quantity': item.min_quantity,
                         'max_quantity': item.max_quantity,
                         'shared_cost_enabled': item.shared_cost_enabled,
@@ -319,6 +326,9 @@ class AuthPortalController(http.Controller):
                         'detail_information': getattr(product, 'detail_information', '') or '',
                         'image_url': f'/web/image/product.template/{product.id}/image_1920/600x600' if product.image_1920 else '',
                         'type': product.type or 'consu',
+                        'is_combo': product.type == 'combo',
+                        'is_combo_multiple_choice': bool(getattr(product, 'is_combo_multiple_choice', False)),
+                        'is_day_tour': bool(getattr(product, 'is_day_tour', False)),
                     },
                     'combos': combos,
                 }
@@ -326,6 +336,66 @@ class AuthPortalController(http.Controller):
         except Exception as e:
             _logger.error("Error getting product detail: %s", str(e))
             return _make_response({'code': 500, 'message': 'Khong the lay chi tiet san pham', 'response': None}, 500)
+
+    @http.route('/api/products/<int:product_id>/combo-items', type='http', auth='user', methods=['POST'], csrf=False)
+    def prepare_combo_items(self, product_id, **kwargs):
+        """Expand selected combo quantities into all combo items automatically.        """
+        data = _parse_json(request.httprequest.data)
+        if data is None:
+            return _make_response({'code': 400, 'message': 'JSON khong hop le', 'response': None}, 400)
+
+        combo_quantities = data.get('combo_quantities') or {}
+        if not isinstance(combo_quantities, dict):
+            return _make_response({'code': 400, 'message': 'combo_quantities phai la object', 'response': None}, 400)
+
+        product = request.env['product.template'].sudo().browse(product_id)
+        if not product.exists() or not product.sale_ok:
+            return _make_response({'code': 404, 'message': 'San pham khong ton tai', 'response': None}, 404)
+
+        if product.type != 'combo':
+            return _make_response({'code': 400, 'message': 'San pham nay khong phai combo', 'response': None}, 400)
+
+        expanded_items = []
+        warnings = []
+
+        for combo in product.combo_ids:
+            raw_qty = combo_quantities.get(str(combo.id), combo_quantities.get(combo.id, 0))
+            try:
+                combo_qty = int(raw_qty)
+            except Exception:
+                combo_qty = 0
+
+            if combo_qty <= 0:
+                continue
+
+            if not combo.combo_item_ids:
+                warnings.append(f'Combo {combo.name} khong co combo item')
+                continue
+
+            for item in combo.combo_item_ids:
+                expanded_items.append({
+                    'combo_id': combo.id,
+                    'combo_name': combo.name,
+                    'combo_item_id': item.id,
+                    'product_id': item.product_id.id,
+                    'product_name': item.product_id.display_name,
+                    'selected_quantity': combo_qty,
+                    'combo_item_quantity': item.quantity or 1.0,
+                    'line_quantity': combo_qty * (item.quantity or 1.0),
+                    # Keep same payload shape as Odoo sale combo widget.
+                    'no_variant_attribute_value_ids': [],
+                    'product_custom_attribute_values': [],
+                })
+
+        return _make_response({
+            'code': 200,
+            'message': 'OK',
+            'response': {
+                'product_id': product.id,
+                'expanded_items': expanded_items,
+                'warnings': warnings,
+            }
+        })
 
     # AUTH - SET API KEY (admin only)
 
