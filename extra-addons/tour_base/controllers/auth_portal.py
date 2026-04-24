@@ -54,6 +54,63 @@ class AuthPortalController(http.Controller):
 
         return selected_combo_items, warnings
 
+    def _create_combo_child_lines(self, order, parent_line, product, selected_combo_items):
+        SaleOrderLine = request.env['sale.order.line'].sudo()
+
+        if not selected_combo_items:
+            return
+
+        section_offset = 0
+        if getattr(product, 'is_combo_multiple_choice', False) or getattr(product, 'is_day_tour', False):
+            combo_item_ids = [item['combo_item_id'] for item in selected_combo_items]
+            combo_items = request.env['product.combo.item'].sudo().browse(combo_item_ids)
+            combo_names = combo_items.mapped('combo_id.name')
+            unique_combo_names = list(dict.fromkeys(combo_names))
+            section_name = ' + '.join(unique_combo_names)
+
+            SaleOrderLine.create({
+                'order_id': order.id,
+                'display_type': 'line_note',
+                'name': section_name,
+                'sequence': parent_line.sequence + 1,
+                'linked_line_id': parent_line.id,
+            })
+            section_offset = 1
+
+        for item_index, combo_item in enumerate(selected_combo_items, start=1):
+            combo_item_record = request.env['product.combo.item'].sudo().browse(combo_item['combo_item_id'])
+            selected_qty = combo_item.get('selected_quantity') or 1
+            try:
+                selected_qty = max(int(selected_qty), 1)
+            except Exception:
+                selected_qty = 1
+
+            if getattr(product, 'is_day_tour', False):
+                item_qty = parent_line.product_uom_qty
+            elif getattr(product, 'is_combo_multiple_choice', False) and combo_item_record.quantity:
+                item_qty = parent_line.product_uom_qty * combo_item_record.quantity * selected_qty
+            else:
+                item_qty = parent_line.product_uom_qty * selected_qty
+
+            child_vals = {
+                'order_id': order.id,
+                'product_id': combo_item['product_id'],
+                'product_uom_qty': item_qty,
+                'combo_item_id': combo_item['combo_item_id'],
+                'sequence': parent_line.sequence + section_offset + item_index,
+                'linked_line_id': parent_line.id,
+            }
+
+            no_variant_ids = combo_item.get('no_variant_attribute_value_ids') or []
+            if no_variant_ids:
+                child_vals['product_no_variant_attribute_value_ids'] = [(6, 0, no_variant_ids)]
+
+            custom_values = combo_item.get('product_custom_attribute_values') or []
+            if custom_values:
+                child_vals['product_custom_attribute_value_ids'] = [(0, 0, value) for value in custom_values]
+
+            SaleOrderLine.create(child_vals)
+
     @http.route('/api/auth/register', type='http', auth='public', methods=['POST'], csrf=False)
     def register(self, **kwargs):
         data = _parse_json(request.httprequest.data)
@@ -483,10 +540,11 @@ class AuthPortalController(http.Controller):
                 if selected_combo_items:
                     line_vals['selected_combo_items'] = json.dumps(selected_combo_items)
 
-            request.env['sale.order.line'].sudo().create(line_vals)
+            parent_line = request.env['sale.order.line'].sudo().create(line_vals)
 
             if selected_combo_items:
-                order.sudo()._onchange_order_line()
+                self._create_combo_child_lines(order, parent_line, product, selected_combo_items)
+                parent_line.sudo().write({'selected_combo_items': False})
 
             order.invalidate_recordset(['amount_total', 'amount_untaxed', 'amount_tax'])
 
