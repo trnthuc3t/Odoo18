@@ -2,6 +2,7 @@
 """Auth Portal Controller - Ket noi React Frontend voi Odoo Portal User."""
 
 import logging
+import json
 import re
 import secrets
 
@@ -18,6 +19,40 @@ def _is_valid_email(email):
 
 
 class AuthPortalController(http.Controller):
+
+    def _build_selected_combo_items(self, product, combo_quantities):
+        selected_combo_items = []
+        warnings = []
+
+        for combo in product.combo_ids:
+            raw_qty = combo_quantities.get(str(combo.id), combo_quantities.get(combo.id, 0))
+            try:
+                combo_qty = int(raw_qty)
+            except Exception:
+                combo_qty = 0
+
+            if combo_qty <= 0:
+                continue
+
+            if not combo.combo_item_ids:
+                warnings.append(f'Combo {combo.name} khong co combo item')
+                continue
+
+            for item in combo.combo_item_ids:
+                selected_combo_items.append({
+                    'combo_id': combo.id,
+                    'combo_name': combo.name,
+                    'combo_item_id': item.id,
+                    'product_id': item.product_id.id,
+                    'product_name': item.product_id.display_name,
+                    'selected_quantity': combo_qty,
+                    'combo_item_quantity': item.quantity or 1.0,
+                    'line_quantity': combo_qty * (item.quantity or 1.0),
+                    'no_variant_attribute_value_ids': [],
+                    'product_custom_attribute_values': [],
+                })
+
+        return selected_combo_items, warnings
 
     @http.route('/api/auth/register', type='http', auth='public', methods=['POST'], csrf=False)
     def register(self, **kwargs):
@@ -355,37 +390,7 @@ class AuthPortalController(http.Controller):
         if product.type != 'combo':
             return _make_response({'code': 400, 'message': 'San pham nay khong phai combo', 'response': None}, 400)
 
-        expanded_items = []
-        warnings = []
-
-        for combo in product.combo_ids:
-            raw_qty = combo_quantities.get(str(combo.id), combo_quantities.get(combo.id, 0))
-            try:
-                combo_qty = int(raw_qty)
-            except Exception:
-                combo_qty = 0
-
-            if combo_qty <= 0:
-                continue
-
-            if not combo.combo_item_ids:
-                warnings.append(f'Combo {combo.name} khong co combo item')
-                continue
-
-            for item in combo.combo_item_ids:
-                expanded_items.append({
-                    'combo_id': combo.id,
-                    'combo_name': combo.name,
-                    'combo_item_id': item.id,
-                    'product_id': item.product_id.id,
-                    'product_name': item.product_id.display_name,
-                    'selected_quantity': combo_qty,
-                    'combo_item_quantity': item.quantity or 1.0,
-                    'line_quantity': combo_qty * (item.quantity or 1.0),
-                    # Keep same payload shape as Odoo sale combo widget.
-                    'no_variant_attribute_value_ids': [],
-                    'product_custom_attribute_values': [],
-                })
+        expanded_items, warnings = self._build_selected_combo_items(product, combo_quantities)
 
         return _make_response({
             'code': 200,
@@ -396,6 +401,114 @@ class AuthPortalController(http.Controller):
                 'warnings': warnings,
             }
         })
+
+    @http.route('/api/orders', type='http', auth='user', methods=['POST'], csrf=False)
+    def create_order(self, **kwargs):
+        data = _parse_json(request.httprequest.data)
+        if data is None:
+            return _make_response({'code': 400, 'message': 'JSON khong hop le', 'response': None}, 400)
+
+        product_id = data.get('product_id')
+        if not product_id:
+            return _make_response({'code': 400, 'message': 'Thieu product_id', 'response': None}, 400)
+
+        try:
+            product_id = int(product_id)
+        except Exception:
+            return _make_response({'code': 400, 'message': 'product_id khong hop le', 'response': None}, 400)
+
+        try:
+            product_qty = int(data.get('product_qty', 1))
+        except Exception:
+            product_qty = 1
+        product_qty = max(product_qty, 1)
+
+        combo_quantities = data.get('combo_quantities') or {}
+        if not isinstance(combo_quantities, dict):
+            return _make_response({'code': 400, 'message': 'combo_quantities phai la object', 'response': None}, 400)
+
+        product = request.env['product.template'].sudo().browse(product_id)
+        if not product.exists() or not product.sale_ok:
+            return _make_response({'code': 404, 'message': 'San pham khong ton tai', 'response': None}, 404)
+
+        variant = product.product_variant_id or request.env['product.product'].sudo().search([
+            ('product_tmpl_id', '=', product.id)
+        ], limit=1)
+        if not variant:
+            return _make_response({'code': 400, 'message': 'Khong tim thay bien the san pham', 'response': None}, 400)
+
+        partner = request.env.user.partner_id.sudo()
+        full_name = (data.get('full_name') or '').strip()
+        phone = (data.get('phone') or '').strip()
+        email = (data.get('email') or '').strip().lower()
+
+        partner_updates = {}
+        if full_name:
+            partner_updates['name'] = full_name
+        if phone:
+            partner_updates['phone'] = phone
+        if email and _is_valid_email(email):
+            partner_updates['email'] = email
+        if partner_updates:
+            partner.write(partner_updates)
+
+        payment_method = (data.get('payment_method') or '').strip()
+        special_requests = (data.get('special_requests') or '').strip()
+        note_parts = []
+        if payment_method:
+            note_parts.append(f'Payment method: {payment_method}')
+        if special_requests:
+            note_parts.append(f'Yeu cau dac biet: {special_requests}')
+
+        order_vals = {
+            'partner_id': partner.id,
+            'partner_invoice_id': partner.id,
+            'partner_shipping_id': partner.id,
+            'note': '\n'.join(note_parts) if note_parts else False,
+        }
+
+        try:
+            order = request.env['sale.order'].sudo().create(order_vals)
+
+            line_vals = {
+                'order_id': order.id,
+                'product_id': variant.id,
+                'product_uom_qty': product_qty,
+            }
+
+            selected_combo_items = []
+            warnings = []
+            if product.type == 'combo' and combo_quantities:
+                selected_combo_items, warnings = self._build_selected_combo_items(product, combo_quantities)
+                if selected_combo_items:
+                    line_vals['selected_combo_items'] = json.dumps(selected_combo_items)
+
+            request.env['sale.order.line'].sudo().create(line_vals)
+
+            if selected_combo_items:
+                order.sudo()._onchange_order_line()
+
+            order.invalidate_recordset(['amount_total', 'amount_untaxed', 'amount_tax'])
+
+            return _make_response({
+                'code': 201,
+                'message': 'Tao don hang thanh cong',
+                'response': {
+                    'order': {
+                        'id': order.id,
+                        'name': order.name,
+                        'state': order.state,
+                        'amount_total': order.amount_total,
+                        'amount_untaxed': order.amount_untaxed,
+                        'amount_tax': order.amount_tax,
+                        'currency': order.currency_id.name if order.currency_id else 'VND',
+                    },
+                    'warnings': warnings,
+                }
+            }, 201)
+        except Exception as e:
+            _logger.error('Error creating order: %s', str(e))
+            return _make_response({'code': 500, 'message': 'Khong the tao don hang', 'response': str(e)}, 500)
 
     # AUTH - SET API KEY (admin only)
 

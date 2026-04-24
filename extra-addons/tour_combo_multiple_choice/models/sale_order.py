@@ -61,6 +61,11 @@ class SaleOrder(models.Model):
                 create_commands = []
                 for item_index, combo_item in enumerate(selected_combo_items):
                     combo_item_record = self.env['product.combo.item'].browse(combo_item['combo_item_id'])
+                    selected_qty = combo_item.get('selected_quantity') or 1
+                    try:
+                        selected_qty = max(int(selected_qty), 1)
+                    except Exception:
+                        selected_qty = 1
                     
                     # For day tour: quantity = customer count from popup (line.product_uom_qty)
                     # For multiple choice combo: use quantity from combo_item * line qty
@@ -68,9 +73,9 @@ class SaleOrder(models.Model):
                     if line.product_template_id.is_day_tour:
                         item_qty = line.product_uom_qty
                     elif line.product_template_id.is_combo_multiple_choice and combo_item_record.quantity:
-                        item_qty = line.product_uom_qty * combo_item_record.quantity
+                        item_qty = line.product_uom_qty * combo_item_record.quantity * selected_qty
                     else:
-                        item_qty = line.product_uom_qty
+                        item_qty = line.product_uom_qty * selected_qty
                     
                     create_commands.append(Command.create({
                         'product_id': combo_item['product_id'],
