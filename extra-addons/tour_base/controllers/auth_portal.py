@@ -20,11 +20,71 @@ def _is_valid_email(email):
 
 class AuthPortalController(http.Controller):
 
-    def _build_selected_combo_items(self, product, combo_quantities):
+    def _build_selected_combo_items(self, product, combo_quantities, combo_selections=None):
         selected_combo_items = []
         warnings = []
+        combo_selections = combo_selections or {}
+
+        total_combo_quantity = 0
+        for raw_qty in combo_quantities.values():
+            try:
+                total_combo_quantity += max(int(raw_qty), 0)
+            except Exception:
+                continue
 
         for combo in product.combo_ids:
+            if getattr(combo, 'is_car_service', False):
+                raw_selection = combo_selections.get(str(combo.id), combo_selections.get(combo.id))
+                selected_item_ids = []
+                if isinstance(raw_selection, list):
+                    for raw_id in raw_selection:
+                        try:
+                            selected_item_ids.append(int(raw_id))
+                        except Exception:
+                            continue
+                elif raw_selection not in (None, '', False):
+                    try:
+                        selected_item_ids = [int(raw_selection)]
+                    except Exception:
+                        selected_item_ids = []
+
+                if not selected_item_ids:
+                    continue
+
+                selected_items = combo.combo_item_ids.filtered(lambda i: i.id in selected_item_ids)
+                if not selected_items:
+                    warnings.append(f'Lua chon car service cho combo {combo.name} khong hop le')
+                    continue
+
+                for item in selected_items:
+                    min_qty = item.min_quantity or 0
+                    max_qty = item.max_quantity or 0
+                    if max_qty > 0:
+                        is_valid_qty_range = min_qty <= total_combo_quantity <= max_qty
+                    else:
+                        is_valid_qty_range = total_combo_quantity >= min_qty
+
+                    if not is_valid_qty_range:
+                        warnings.append(
+                            f'Car service {item.product_id.display_name} khong hop le voi tong so luong combo {total_combo_quantity} '
+                            f'(yeu cau min={min_qty}, max={max_qty})'
+                        )
+                        continue
+
+                    selected_combo_items.append({
+                        'combo_id': combo.id,
+                        'combo_name': combo.name,
+                        'combo_item_id': item.id,
+                        'product_id': item.product_id.id,
+                        'product_name': item.product_id.display_name,
+                        'selected_quantity': 1,
+                        'combo_item_quantity': item.quantity or 1.0,
+                        'line_quantity': item.quantity or 1.0,
+                        'no_variant_attribute_value_ids': [],
+                        'product_custom_attribute_values': [],
+                    })
+                continue
+
             raw_qty = combo_quantities.get(str(combo.id), combo_quantities.get(combo.id, 0))
             try:
                 combo_qty = int(raw_qty)
@@ -401,6 +461,7 @@ class AuthPortalController(http.Controller):
                 combos.append({
                     'id': combo.id,
                     'name': combo.name,
+                    'is_car_service': bool(getattr(combo, 'is_car_service', False)),
                     'items': combo_items,
                 })
 
@@ -440,6 +501,10 @@ class AuthPortalController(http.Controller):
         if not isinstance(combo_quantities, dict):
             return _make_response({'code': 400, 'message': 'combo_quantities phai la object', 'response': None}, 400)
 
+        combo_selections = data.get('combo_selections') or {}
+        if not isinstance(combo_selections, dict):
+            return _make_response({'code': 400, 'message': 'combo_selections phai la object', 'response': None}, 400)
+
         product = request.env['product.template'].sudo().browse(product_id)
         if not product.exists() or not product.sale_ok:
             return _make_response({'code': 404, 'message': 'San pham khong ton tai', 'response': None}, 404)
@@ -447,7 +512,7 @@ class AuthPortalController(http.Controller):
         if product.type != 'combo':
             return _make_response({'code': 400, 'message': 'San pham nay khong phai combo', 'response': None}, 400)
 
-        expanded_items, warnings = self._build_selected_combo_items(product, combo_quantities)
+        expanded_items, warnings = self._build_selected_combo_items(product, combo_quantities, combo_selections)
 
         return _make_response({
             'code': 200,
@@ -483,6 +548,10 @@ class AuthPortalController(http.Controller):
         combo_quantities = data.get('combo_quantities') or {}
         if not isinstance(combo_quantities, dict):
             return _make_response({'code': 400, 'message': 'combo_quantities phai la object', 'response': None}, 400)
+
+        combo_selections = data.get('combo_selections') or {}
+        if not isinstance(combo_selections, dict):
+            return _make_response({'code': 400, 'message': 'combo_selections phai la object', 'response': None}, 400)
 
         product = request.env['product.template'].sudo().browse(product_id)
         if not product.exists() or not product.sale_ok:
@@ -535,8 +604,8 @@ class AuthPortalController(http.Controller):
 
             selected_combo_items = []
             warnings = []
-            if product.type == 'combo' and combo_quantities:
-                selected_combo_items, warnings = self._build_selected_combo_items(product, combo_quantities)
+            if product.type == 'combo' and (combo_quantities or combo_selections):
+                selected_combo_items, warnings = self._build_selected_combo_items(product, combo_quantities, combo_selections)
                 if selected_combo_items:
                     line_vals['selected_combo_items'] = json.dumps(selected_combo_items)
 

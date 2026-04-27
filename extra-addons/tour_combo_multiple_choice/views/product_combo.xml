@@ -8,6 +8,7 @@
             <xpath expr="//field[@name='company_id']" position="after">
                 <field name="is_multiple_choice" widget="boolean_toggle" string="Multiple Choice Combo"/>
                 <field name="is_day_tour" widget="boolean_toggle" string="Day Tour"/>
+                <field name="is_car_service" widget="boolean_toggle" string="Car Service"/>
             </xpath>
             <xpath expr="//field[@name='combo_item_ids']" position="replace">
                 <field name="combo_item_ids">

@@ -14,6 +14,11 @@ class ProductCombo(models.Model):
         default=False,
         help='Indicates if the combo is a day tour.'
     )
+    is_car_service = fields.Boolean(
+        string='Is Car Service',
+        default=False,
+        help='Indicates if this combo choice is for car service selection.'
+    )
 
     @api.constrains('combo_item_ids')
     def _check_combo_item_ids_no_duplicates(self):
