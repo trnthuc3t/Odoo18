@@ -20,6 +20,36 @@ def _is_valid_email(email):
 
 class AuthPortalController(http.Controller):
 
+    # def _get_user_from_react_token(self):
+    #     auth_header = request.httprequest.headers.get('Authorization', '')
+    #     if not auth_header.startswith('Bearer '):
+    #         return request.env['res.users']
+
+    #     token = auth_header.replace('Bearer ', '').strip()
+    #     match = re.match(r'^token_(\d+)_[A-Za-z0-9]+$', token)
+    #     if not match:
+    #         return request.env['res.users']
+
+    #     user = request.env['res.users'].sudo().browse(int(match.group(1)))
+    #     return user if user.exists() else request.env['res.users']
+
+    def _get_current_website_user(self):
+        # token_user = self._get_user_from_react_token()
+        # if token_user and token_user.exists():
+        #     return token_user
+
+        session_uid = request.session.uid
+        if session_uid:
+            user = request.env['res.users'].sudo().browse(session_uid)
+            if user.exists():
+                return user
+
+        user = request.env.user
+        if user and user.exists() and not user._is_public():
+            return user.sudo(user.id)
+
+        return request.env['res.users']
+
     def _build_selected_combo_items(self, product, combo_quantities, combo_selections=None):
         selected_combo_items = []
         warnings = []
@@ -320,7 +350,9 @@ class AuthPortalController(http.Controller):
     @http.route('/api/auth/me', type='http', auth='user', methods=['POST'], csrf=False)
     def me(self, **kwargs):
         try:
-            user = request.env.user
+            user = self._get_current_website_user()
+            if not user or not user.exists():
+                return _make_response({'code': 401, 'message': 'Not authenticated', 'response': None}, 401)
             partner = user.partner_id
             return _make_response({
                 'code': 200,
@@ -563,7 +595,11 @@ class AuthPortalController(http.Controller):
         if not variant:
             return _make_response({'code': 400, 'message': 'Khong tim thay bien the san pham', 'response': None}, 400)
 
-        partner = request.env.user.partner_id.sudo()
+        current_user = self._get_current_website_user()
+        if not current_user or not current_user.exists():
+            return _make_response({'code': 401, 'message': 'Not authenticated', 'response': None}, 401)
+
+        partner = current_user.partner_id.sudo()
         full_name = (data.get('full_name') or '').strip()
         phone = (data.get('phone') or '').strip()
         email = (data.get('email') or '').strip().lower()
