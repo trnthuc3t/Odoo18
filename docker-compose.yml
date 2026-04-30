@@ -16,6 +16,7 @@ services:
       - db
     ports:
       - "8070:8069"
+      - "8072:8072"
     volumes:
       - odoo-web-data:/var/lib/odoo
       - ./extra-addons:/mnt/extra-addons # Nơi bạn code module Travel

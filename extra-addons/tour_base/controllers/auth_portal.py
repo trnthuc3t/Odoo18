@@ -263,7 +263,20 @@ class AuthPortalController(http.Controller):
             _logger.warning("Failed to create portal user: %s", str(e))
             return _make_response({'code': 500, 'message': 'Khong the tao tai khoan', 'response': str(e)}, 500)
 
+        try:
+            auth_result = request.session.authenticate(request.env.cr.dbname, {
+                'type': 'password',
+                'login': email,
+                'password': password,
+            })
+            if not auth_result:
+                raise ValueError('Failed to authenticate new portal user')
+        except Exception as e:
+            _logger.warning("Portal user created but auto-login failed for %s: %s", email, str(e))
+            return _make_response({'code': 500, 'message': 'Tai khoan da tao nhung khong the dang nhap tu dong', 'response': None}, 500)
+
         _logger.info("Portal user registered: id=%s, email=%s", user.id, email)
+        csrf_token = request.csrf_token()
 
         return _make_response({
             'code': 201,
@@ -277,6 +290,8 @@ class AuthPortalController(http.Controller):
                     'phone': phone,
                 },
                 'token': 'token_%s_%s' % (user.id, secrets.token_hex(8)),
+                'session_id': request.session.sid,
+                'csrf_token': csrf_token,
                 'expires_in': 7 * 24 * 3600,
             }
         }, 201)
