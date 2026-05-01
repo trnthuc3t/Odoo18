@@ -12,6 +12,7 @@ from ..livechat_identity import (
     get_livechat_display_name,
     set_livechat_identity,
 )
+from datetime import datetime, timedelta
 
 
 class TourLivechatBridgeApi(http.Controller):
@@ -26,7 +27,9 @@ class TourLivechatBridgeApi(http.Controller):
                 'response': None,
             }, 401)
 
-        identity = set_livechat_identity(user.sudo(user.id))
+        # `sudo()` only accepts a boolean flag in this Odoo version.
+        # Using `sudo(user.id)` triggers AssertionError and returns 500.
+        identity = set_livechat_identity(user)
         return _make_response({
             'code': 200,
             'message': 'Livechat identity synchronized',
@@ -47,6 +50,55 @@ class TourLivechatBridgeApi(http.Controller):
             },
         })
 
+    @http.route('/api/livechat/session/reset', type='http', auth='public', methods=['POST'], csrf=False)
+    def reset_session(self, **kwargs):
+        clear_livechat_identity()
+        request.future_response.set_cookie('dgid', '', max_age=0)
+        return _make_response({
+            'code': 200,
+            'message': 'Livechat session reset',
+            'response': {
+                'cleared': True,
+            },
+        })
+
+    @http.route('/api/livechat/session/restore', type='http', auth='user', methods=['POST'], csrf=False)
+    def restore_session(self, **kwargs):
+        user = request.env.user
+        if not user or not user.exists() or user._is_public():
+            return _make_response({
+                'code': 401,
+                'message': 'Not authenticated',
+                'response': {'restored': False},
+            }, 401)
+
+        partner = user.partner_id
+        if not partner:
+            return _make_response({
+                'code': 200,
+                'message': 'No partner linked',
+                'response': {'restored': False},
+            })
+
+        key = 'tour_livechat.guest_token.%d' % partner.id
+        token = request.env['ir.config_parameter'].sudo().get_param(key)
+
+        if token:
+            expiration = datetime.now() + timedelta(days=365)
+            request.future_response.set_cookie(
+                'dgid', token, httponly=True, expires=expiration
+            )
+            return _make_response({
+                'code': 200,
+                'message': 'Session restored',
+                'response': {'restored': True},
+            })
+
+        return _make_response({
+            'code': 200,
+            'message': 'No previous session found',
+            'response': {'restored': False},
+        })
 
 class TourLivechatController(LivechatController):
 

@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 
+from urllib.parse import urlparse
+
 from odoo import api, fields, models
+from odoo.http import request as http_request
 
 from ..livechat_identity import get_livechat_display_name
 
@@ -49,3 +52,24 @@ class ImLivechatChannel(models.Model):
         if not user_id:
             vals['anonymous_name'] = display_name
         return vals
+
+    def get_livechat_info(self, username=None):
+        info = super().get_livechat_info(username=username)
+        try:
+            # When the livechat loader is requested cross-origin (e.g., from a React
+            # embed at a different port), return the requester's origin as server_url.
+            # This makes params.serverURL === window.origin in the widget, so the bus
+            # service creates a same-origin worker instead of a data: URL worker.
+            # Same-origin workers have no cookie restriction issues for WebSocket auth.
+            origin = http_request.httprequest.headers.get('Origin', '')
+            referer = http_request.httprequest.headers.get('Referer', '')
+            ref_url = origin or referer
+            if ref_url:
+                parsed = urlparse(ref_url)
+                ref_origin = f"{parsed.scheme}://{parsed.netloc}"
+                base_url = info.get('server_url', '').rstrip('/')
+                if ref_origin and ref_origin != base_url:
+                    info['server_url'] = ref_origin
+        except Exception:
+            pass
+        return info
