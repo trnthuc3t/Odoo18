@@ -46,7 +46,7 @@ class AuthPortalController(http.Controller):
 
         user = request.env.user
         if user and user.exists() and not user._is_public():
-            return user.sudo(user.id)
+            return user.sudo()
 
         return request.env['res.users']
 
@@ -687,6 +687,85 @@ class AuthPortalController(http.Controller):
         except Exception as e:
             _logger.error('Error creating order: %s', str(e))
             return _make_response({'code': 500, 'message': 'Khong the tao don hang', 'response': str(e)}, 500)
+
+    @http.route('/api/orders/history', type='http', auth='user', methods=['GET'], csrf=False)
+    def get_order_history(self, **kwargs):
+        """Lay lich su don du lich cua user dang dang nhap."""
+        current_user = self._get_current_website_user()
+        if not current_user or not current_user.exists() or current_user._is_public():
+            return _make_response({'code': 401, 'message': 'Not authenticated', 'response': None}, 401)
+
+        partner = current_user.partner_id.sudo()
+
+        params = request.httprequest.args
+        try:
+            limit = int(params.get('limit', 20))
+        except Exception:
+            limit = 20
+        try:
+            offset = int(params.get('offset', 0))
+        except Exception:
+            offset = 0
+
+        limit = max(1, min(limit, 100))
+        offset = max(offset, 0)
+
+        include_all_states = str(params.get('include_all', '')).lower() in ('1', 'true', 'yes')
+
+        domain = [('partner_id', '=', partner.id)]
+        if not include_all_states:
+            domain.append(('state', 'in', ['sale', 'done']))
+
+        Order = request.env['sale.order'].sudo()
+
+        try:
+            total = Order.search_count(domain)
+            orders = Order.search(domain, order='date_order desc, id desc', limit=limit, offset=offset)
+
+            state_labels = dict(Order._fields['state'].selection)
+
+            data_orders = []
+            for order in orders:
+                lines = []
+                for line in order.order_line.filtered(lambda l: not l.display_type):
+                    lines.append({
+                        'id': line.id,
+                        'product_id': line.product_id.id,
+                        'product_name': line.product_id.display_name,
+                        'quantity': line.product_uom_qty,
+                        'price_unit': line.price_unit,
+                        'price_subtotal': line.price_subtotal,
+                        'price_total': line.price_total,
+                        'image_url': f'/web/image/product.product/{line.product_id.id}/image_128/128x128' if line.product_id.image_128 else '',
+                    })
+
+                data_orders.append({
+                    'id': order.id,
+                    'name': order.name,
+                    'state': order.state,
+                    'state_label': state_labels.get(order.state, order.state),
+                    'date_order': order.date_order.isoformat() if order.date_order else '',
+                    'amount_untaxed': order.amount_untaxed,
+                    'amount_tax': order.amount_tax,
+                    'amount_total': order.amount_total,
+                    'currency': order.currency_id.name if order.currency_id else 'VND',
+                    'line_count': len(lines),
+                    'lines': lines,
+                })
+
+            return _make_response({
+                'code': 200,
+                'message': 'OK',
+                'response': {
+                    'orders': data_orders,
+                    'total': total,
+                    'limit': limit,
+                    'offset': offset,
+                }
+            })
+        except Exception as e:
+            _logger.error('Error fetching order history: %s', str(e))
+            return _make_response({'code': 500, 'message': 'Khong the lay lich su don hang', 'response': str(e)}, 500)
 
     # AUTH - SET API KEY (admin only)
 
