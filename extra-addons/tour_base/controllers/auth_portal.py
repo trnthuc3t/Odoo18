@@ -457,6 +457,9 @@ class AuthPortalController(http.Controller):
                     'currency': p.currency_id.name if p.currency_id else 'VND',
                     'description': p.description_sale or '',
                     'detail_information': getattr(p, 'detail_information', '') or '',
+                    'tour_duration': getattr(p, 'tour_duration', '') or '',
+                    'tour_location_address': getattr(p, 'tour_location_address', '') or '',
+                    'tour_location_map_url': getattr(p, 'tour_location_map_url', '') or '',
                     'image_url': f'/web/image/product.template/{p.id}/image_1920/300x300' if p.image_1920 else '',
                     'type': p.type or 'consu',
                     'is_combo': is_combo,
@@ -524,6 +527,9 @@ class AuthPortalController(http.Controller):
                         'currency': product.currency_id.name if product.currency_id else 'VND',
                         'description': product.description_sale or '',
                         'detail_information': getattr(product, 'detail_information', '') or '',
+                        'tour_duration': getattr(product, 'tour_duration', '') or '',
+                        'tour_location_address': getattr(product, 'tour_location_address', '') or '',
+                        'tour_location_map_url': getattr(product, 'tour_location_map_url', '') or '',
                         'image_url': f'/web/image/product.template/{product.id}/image_1920/600x600' if product.image_1920 else '',
                         'type': product.type or 'consu',
                         'is_combo': product.type == 'combo',
@@ -766,6 +772,56 @@ class AuthPortalController(http.Controller):
         except Exception as e:
             _logger.error('Error fetching order history: %s', str(e))
             return _make_response({'code': 500, 'message': 'Khong the lay lich su don hang', 'response': str(e)}, 500)
+
+    # TOURS - FOR RAG INGEST
+
+    @http.route('/api/tours', type='http', auth='public', methods=['GET'], csrf=False)
+    def get_tours_for_rag(self, **kwargs):
+        """Lay toan bo tour cho RAG ingest. Khong pagination, return toan bo."""
+        try:
+            Tour = request.env['product.template'].sudo()
+            
+            tours = Tour.search([
+                ('type', '=', 'combo'),
+                ('sale_ok', '=', True)
+            ], order='id')
+
+            tours_data = []
+            for tour in tours:
+                # Lay description chi tiet
+                description = tour.description_sale or ''
+                detail_info = getattr(tour, 'detail_information', '') or ''
+                
+                full_description = f"{tour.name}\n\n{description}\n\n{detail_info}".strip()
+                
+                # Get category name if available
+                category_name = tour.categ_id.name if tour.categ_id else 'General'
+                
+                tours_data.append({
+                    'id': tour.id,
+                    'name': tour.name,
+                    'category': category_name,
+                    'price': tour.list_price,
+                    'currency': tour.currency_id.name if tour.currency_id else 'VND',
+                    'description': description,
+                    'detail_information': detail_info,
+                    'full_text': full_description,  # For embedding
+                    'image_url': f'/web/image/product.template/{tour.id}/image_1920' if tour.image_1920 else '',
+                    'created_at': tour.create_date.isoformat() if tour.create_date else '',
+                    'updated_at': tour.write_date.isoformat() if tour.write_date else '',
+                })
+
+            return _make_response({
+                'code': 200,
+                'message': f'Lay {len(tours_data)} tour thanh cong',
+                'response': {
+                    'tours': tours_data,
+                    'total': len(tours_data),
+                }
+            })
+        except Exception as e:
+            _logger.error('Error fetching tours: %s', str(e))
+            return _make_response({'code': 500, 'message': 'Khong the lay tour', 'response': str(e)}, 500)
 
     # AUTH - SET API KEY (admin only)
 
