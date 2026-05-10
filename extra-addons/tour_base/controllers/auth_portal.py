@@ -5,6 +5,7 @@ import logging
 import json
 import re
 import secrets
+import base64
 
 from odoo import http
 from odoo.http import request
@@ -19,6 +20,12 @@ def _is_valid_email(email):
 
 
 class AuthPortalController(http.Controller):
+
+    def _build_product_image_url(self, product, size='600x600'):
+        if not product or not product.exists() or not product.image_1920:
+            return ''
+        version = int(product.write_date.timestamp()) if product.write_date else 0
+        return f'/api/products/{product.id}/image/{size}?v={version}'
 
     # def _get_user_from_react_token(self):
     #     auth_header = request.httprequest.headers.get('Authorization', '')
@@ -429,6 +436,33 @@ class AuthPortalController(http.Controller):
 
     # PRODUCTS - LIST
 
+    @http.route('/api/products/<int:product_id>/image/<string:size>', type='http', auth='public', methods=['GET'], csrf=False)
+    def get_product_image(self, product_id, size='600x600', **kwargs):
+        product = request.env['product.template'].sudo().browse(product_id)
+        if not product.exists() or not product.sale_ok or not product.image_1920:
+            return request.not_found()
+
+        try:
+            image_binary = base64.b64decode(product.image_1920)
+        except Exception:
+            return request.not_found()
+
+        content_type = 'application/octet-stream'
+        if image_binary.startswith(b'\x89PNG'):
+            content_type = 'image/png'
+        elif image_binary.startswith(b'\xff\xd8'):
+            content_type = 'image/jpeg'
+        elif image_binary.startswith(b'RIFF') and image_binary[8:12] == b'WEBP':
+            content_type = 'image/webp'
+
+        return request.make_response(
+            image_binary,
+            headers=[
+                ('Content-Type', content_type),
+                ('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0'),
+            ],
+        )
+
     @http.route('/api/products', type='http', auth='public', methods=['GET'], csrf=False)
     def get_products(self, **kwargs):
         try:
@@ -460,7 +494,7 @@ class AuthPortalController(http.Controller):
                     'tour_duration': getattr(p, 'tour_duration', '') or '',
                     'tour_location_address': getattr(p, 'tour_location_address', '') or '',
                     'tour_location_map_url': getattr(p, 'tour_location_map_url', '') or '',
-                    'image_url': f'/web/image/product.template/{p.id}/image_1920/300x300' if p.image_1920 else '',
+                    'image_url': self._build_product_image_url(p, '600x600'),
                     'type': p.type or 'consu',
                     'is_combo': is_combo,
                     'is_combo_multiple_choice': bool(getattr(p, 'is_combo_multiple_choice', False)) if is_combo else False,
@@ -530,7 +564,7 @@ class AuthPortalController(http.Controller):
                         'tour_duration': getattr(product, 'tour_duration', '') or '',
                         'tour_location_address': getattr(product, 'tour_location_address', '') or '',
                         'tour_location_map_url': getattr(product, 'tour_location_map_url', '') or '',
-                        'image_url': f'/web/image/product.template/{product.id}/image_1920/600x600' if product.image_1920 else '',
+                        'image_url': self._build_product_image_url(product, '1200x600'),
                         'type': product.type or 'consu',
                         'is_combo': product.type == 'combo',
                         'is_combo_multiple_choice': bool(getattr(product, 'is_combo_multiple_choice', False)),
