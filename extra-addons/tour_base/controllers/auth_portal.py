@@ -807,55 +807,195 @@ class AuthPortalController(http.Controller):
             _logger.error('Error fetching order history: %s', str(e))
             return _make_response({'code': 500, 'message': 'Khong the lay lich su don hang', 'response': str(e)}, 500)
 
-    # TOURS - FOR RAG INGEST
 
-    @http.route('/api/tours', type='http', auth='public', methods=['GET'], csrf=False)
-    def get_tours_for_rag(self, **kwargs):
-        """Lay toan bo tour cho RAG ingest. Khong pagination, return toan bo."""
+    @http.route('/api/tours-for-chunking', type='http', auth='public', methods=['GET'], csrf=False)
+    def get_tours_for_chunking(self, **kwargs):
+        # Lấy danh sách tour không chứa ảnh cho việc chunking dữ liệu vào vector database, chỉ lấy các trường cần thiết và giới hạn độ dài text để tránh lỗi khi lưu trữ
         try:
+            try:
+                limit = int(request.httprequest.args.get('limit', '50'))
+                offset = int(request.httprequest.args.get('offset', '0'))
+            except (ValueError, TypeError):
+                limit = 50
+                offset = 0
+            
+            if limit < 1 or limit > 500:
+                limit = 50
+            if offset < 0:
+                offset = 0
+            
+            _logger.info(f"Fetching tours for chunking: limit={limit}, offset={offset}")
+            
             Tour = request.env['product.template'].sudo()
+            
+            total_tours = Tour.search_count([
+                ('type', '=', 'combo'),
+                ('sale_ok', '=', True)
+            ])
             
             tours = Tour.search([
                 ('type', '=', 'combo'),
                 ('sale_ok', '=', True)
-            ], order='id')
+            ], order='id asc', offset=offset, limit=limit)
 
             tours_data = []
             for tour in tours:
-                # Lay description chi tiet
-                description = tour.description_sale or ''
-                detail_info = getattr(tour, 'detail_information', '') or ''
-                
-                full_description = f"{tour.name}\n\n{description}\n\n{detail_info}".strip()
-                
-                # Get category name if available
-                category_name = tour.categ_id.name if tour.categ_id else 'General'
-                
-                tours_data.append({
-                    'id': tour.id,
-                    'name': tour.name,
-                    'category': category_name,
-                    'price': tour.list_price,
-                    'currency': tour.currency_id.name if tour.currency_id else 'VND',
-                    'description': description,
-                    'detail_information': detail_info,
-                    'full_text': full_description,  # For embedding
-                    'image_url': f'/web/image/product.template/{tour.id}/image_1920' if tour.image_1920 else '',
-                    'created_at': tour.create_date.isoformat() if tour.create_date else '',
-                    'updated_at': tour.write_date.isoformat() if tour.write_date else '',
-                })
+                try:
+                    description = tour.description_sale or ''
+                    detail_info = getattr(tour, 'detail_information', '') or ''
+                    
+                    if description and len(description) > 500:
+                        description = description[:500]
+                    
+                    if detail_info and len(detail_info) > 500:
+                        detail_info = detail_info[:500]
+                    
+                    category_name = tour.categ_id.name if tour.categ_id else 'General'
+                    
+                    created_at = tour.create_date.isoformat() if tour.create_date else ''
+                    updated_at = tour.write_date.isoformat() if tour.write_date else ''
+                    
+                    tours_data.append({
+                        'id': tour.id,
+                        'name': tour.name,
+                        'category': category_name,
+                        'price': tour.list_price,
+                        'currency': tour.currency_id.name if tour.currency_id else 'VND',
+                        'description': description,
+                        'detail_information': detail_info,
+                        'created_at': created_at,
+                        'updated_at': updated_at,
+                    })
+                except Exception as e:
+                    _logger.warning(f"Error processing tour {tour.id}: {e}")
+                    continue
 
+            current_page = (offset // limit) + 1 if limit > 0 else 1
+            has_more = (offset + limit) < total_tours if total_tours > 0 else False
+            
             return _make_response({
                 'code': 200,
-                'message': f'Lay {len(tours_data)} tour thanh cong',
+                'message': f'Lay {len(tours_data)} tour thanh cong (trang {current_page})',
                 'response': {
                     'tours': tours_data,
-                    'total': len(tours_data),
+                    'total': total_tours,
+                    'limit': limit,
+                    'offset': offset,
+                    'has_more': has_more
                 }
             })
         except Exception as e:
-            _logger.error('Error fetching tours: %s', str(e))
-            return _make_response({'code': 500, 'message': 'Khong the lay tour', 'response': str(e)}, 500)
+            _logger.error(f'Error in get_tours_for_chunking: {str(e)}', exc_info=True)
+            return _make_response({
+                'code': 500,
+                'message': 'Khong the lay tour',
+                'response': str(e)
+            }, 500)
+
+
+    @http.route('/api/tours', type='http', auth='public', methods=['GET'], csrf=False)
+    def get_tours_for_rag(self, **kwargs):
+        try:
+            # Parse pagination parameters with safe defaults
+            try:
+                limit = int(request.httprequest.args.get('limit', '100'))
+                offset = int(request.httprequest.args.get('offset', '0'))
+            except (ValueError, TypeError) as e:
+                _logger.warning(f"Invalid pagination params: {e}")
+                limit = 100
+                offset = 0
+            
+            # Validate and sanitize parameters
+            if limit < 1:
+                limit = 100
+            elif limit > 1000:
+                limit = 1000
+                
+            if offset < 0:
+                offset = 0
+            
+            _logger.info(f"Fetching tours with limit={limit}, offset={offset}")
+            
+            Tour = request.env['product.template'].sudo()
+            
+            # Build search domain
+            domain = [
+                ('type', '=', 'combo'),
+                ('sale_ok', '=', True)
+            ]
+            
+            try:
+                total_tours = Tour.search_count(domain)
+            except Exception as e:
+                _logger.warning(f"search_count failed, trying fallback: {e}")
+                total_tours = 0
+            
+            try:
+                tours = Tour.search(domain, order='id asc', offset=offset, limit=limit)
+            except Exception as e:
+                _logger.warning(f"search with offset/limit failed, trying without: {e}")
+                tours = Tour.search(domain, order='id asc')
+                tours = tours[offset:offset + limit]
+
+            tours_data = []
+            for tour in tours:
+                try:
+                    description = tour.description_sale or ''
+                    detail_info = getattr(tour, 'detail_information', '') or ''
+                    
+                    if description and len(description) > 1500:
+                        description = description[:1500]
+                    
+                    if detail_info and len(detail_info) > 1500:
+                        detail_info = detail_info[:1500]
+                    
+                    full_description = f"{tour.name}\n\n{description}\n\n{detail_info}".strip()
+                    
+                    category_name = tour.categ_id.name if tour.categ_id else 'General'
+                    
+                    image_url = f'/web/image/product.template/{tour.id}/image_1920'
+                    
+                    created_at = tour.create_date.isoformat() if tour.create_date else ''
+                    updated_at = tour.write_date.isoformat() if tour.write_date else ''
+                    
+                    tours_data.append({
+                        'id': tour.id,
+                        'name': tour.name,
+                        'category': category_name,
+                        'price': tour.list_price,
+                        'currency': tour.currency_id.name if tour.currency_id else 'VND',
+                        'description': description,
+                        'detail_information': detail_info,
+                        'full_text': full_description,
+                        'image_url': image_url,
+                        'created_at': created_at,
+                        'updated_at': updated_at,
+                    })
+                except Exception as e:
+                    _logger.warning(f"Error processing tour {tour.id}: {e}")
+                    continue
+
+            current_page = (offset // limit) + 1 if limit > 0 else 1
+            has_more = (offset + limit) < total_tours if total_tours > 0 else False
+            
+            return _make_response({
+                'code': 200,
+                'message': f'Lay {len(tours_data)} tour thanh cong (trang {current_page})',
+                'response': {
+                    'tours': tours_data,
+                    'total': total_tours,
+                    'limit': limit,
+                    'offset': offset,
+                    'has_more': has_more
+                }
+            })
+        except Exception as e:
+            _logger.error(f'Error in get_tours_for_rag: {str(e)}', exc_info=True)
+            return _make_response({
+                'code': 500,
+                'message': 'Khong the lay tour',
+                'response': str(e)
+            }, 500)
 
     # AUTH - SET API KEY (admin only)
 
