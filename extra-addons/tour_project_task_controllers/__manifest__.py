@@ -21,6 +21,7 @@
         "hr",
         "mail",
         "resource",
+        "tour_base",
         "tour_project",
         "tour_lark_connector",
         "tour_n8n_connector",

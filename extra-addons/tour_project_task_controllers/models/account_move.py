@@ -8,6 +8,10 @@ _logger = logging.getLogger(__name__)
 class AccountMove(models.Model):
     _inherit = 'account.move'
 
+    def _get_runtime_environment(self):
+        self.ensure_one()
+        return self.env['ir.config_parameter'].sudo().get_param('web.base.env', default='local')
+
     is_guarantee_invoice = fields.Boolean(
         string='Is Guarantee Invoice', 
         default=False, 
@@ -25,7 +29,7 @@ class AccountMove(models.Model):
     def _constraints_payment_state(self):
         for record in self:
             if record.payment_state in ('paid', 'parital') and not record.tasks_generated:
-                if record.get_environment() == 'local':
+                if record._get_runtime_environment() == 'local':
                     record._generate_tasks_from_invoice()
                 else:
                     record._generate_tasks_from_invoice_queue()
@@ -383,7 +387,7 @@ class AccountMove(models.Model):
             return
         if not self.move_type == "out_invoice":
             return
-        if self.get_environment() == 'local':
+        if self._get_runtime_environment() == 'local':
             self._generate_tasks_from_invoice()
         else:
             self._generate_tasks_from_invoice_queue()

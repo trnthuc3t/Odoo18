@@ -6,8 +6,9 @@ import json
 import re
 import secrets
 import base64
+from datetime import datetime, time
 
-from odoo import http
+from odoo import http, fields
 from odoo.http import request
 
 from .auth_helper import _make_response, _parse_json
@@ -56,6 +57,51 @@ class AuthPortalController(http.Controller):
             return user.sudo()
 
         return request.env['res.users']
+
+    def _get_immediate_payment_term(self):
+        """Return the Immediate Payment term if available."""
+        payment_term_model = request.env['account.payment.term'].sudo()
+        ir_model_data = request.env['ir.model.data'].sudo()
+
+        for xmlid in (
+            'account.account_payment_term_immediate',
+            'account.account_payment_term_immediate_payment',
+        ):
+            res_id = ir_model_data._xmlid_to_res_id(xmlid, raise_if_not_found=False)
+            if res_id:
+                payment_term = payment_term_model.browse(res_id)
+                if payment_term.exists():
+                    return payment_term
+
+        payment_term = payment_term_model.search([('name', '=', 'Immediate Payment')], limit=1)
+        if payment_term:
+            return payment_term
+
+        payment_term = payment_term_model.search([('name', 'ilike', 'Immediate')], limit=1)
+        return payment_term
+
+    def _parse_commitment_date(self, commitment_date_value):
+        """Parse a date string from React into an Odoo datetime string."""
+        if not commitment_date_value:
+            return False
+
+        if isinstance(commitment_date_value, datetime):
+            return fields.Datetime.to_string(commitment_date_value)
+
+        if isinstance(commitment_date_value, str):
+            raw_value = commitment_date_value.strip()
+            if not raw_value:
+                return False
+
+            try:
+                selected_date = datetime.strptime(raw_value[:10], '%Y-%m-%d').date()
+            except Exception:
+                return False
+
+            commitment_datetime = datetime.combine(selected_date, time(hour=12, minute=0, second=0))
+            return fields.Datetime.to_string(commitment_datetime)
+
+        return False
 
     def _build_selected_combo_items(self, product, combo_quantities, combo_selections=None):
         selected_combo_items = []
@@ -671,6 +717,8 @@ class AuthPortalController(http.Controller):
 
         payment_method = (data.get('payment_method') or '').strip()
         special_requests = (data.get('special_requests') or '').strip()
+        commitment_date = self._parse_commitment_date(data.get('commitment_date'))
+        payment_term = self._get_immediate_payment_term()
         note_parts = []
         if payment_method:
             note_parts.append(f'Payment method: {payment_method}')
@@ -683,6 +731,12 @@ class AuthPortalController(http.Controller):
             'partner_shipping_id': partner.id,
             'note': '\n'.join(note_parts) if note_parts else False,
         }
+
+        if payment_term:
+            order_vals['payment_term_id'] = payment_term.id
+
+        if commitment_date:
+            order_vals['commitment_date'] = commitment_date
 
         try:
             order = request.env['sale.order'].sudo().create(order_vals)
