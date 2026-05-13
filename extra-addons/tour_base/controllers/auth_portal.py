@@ -22,24 +22,135 @@ def _is_valid_email(email):
 
 class AuthPortalController(http.Controller):
 
+    def _get_realtime_channel_model_name(self):
+        registry = request.env.registry
+        if 'discuss.channel' in registry.models:
+            return 'discuss.channel'
+        if 'mail.channel' in registry.models:
+            return 'mail.channel'
+        return False
+
+    def _get_realtime_member_model_name(self):
+        registry = request.env.registry
+        if 'discuss.channel.member' in registry.models:
+            return 'discuss.channel.member'
+        if 'mail.channel.member' in registry.models:
+            return 'mail.channel.member'
+        return False
+
     def _build_product_image_url(self, product, size='600x600'):
         if not product or not product.exists() or not product.image_1920:
             return ''
         version = int(product.write_date.timestamp()) if product.write_date else 0
         return f'/api/products/{product.id}/image/{size}?v={version}'
 
-    # def _get_user_from_react_token(self):
-    #     auth_header = request.httprequest.headers.get('Authorization', '')
-    #     if not auth_header.startswith('Bearer '):
-    #         return request.env['res.users']
+    def _get_user_from_react_token(self):
+        auth_header = request.httprequest.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return request.env['res.users']
 
-    #     token = auth_header.replace('Bearer ', '').strip()
-    #     match = re.match(r'^token_(\d+)_[A-Za-z0-9]+$', token)
-    #     if not match:
-    #         return request.env['res.users']
+        token = auth_header.replace('Bearer ', '').strip()
+        match = re.match(r'^token_(\d+)_[A-Za-z0-9]+$', token)
+        if not match:
+            return request.env['res.users']
 
-    #     user = request.env['res.users'].sudo().browse(int(match.group(1)))
-    #     return user if user.exists() else request.env['res.users']
+        user = request.env['res.users'].sudo().browse(int(match.group(1)))
+        if user.exists() and not user._is_public():
+            return user
+        return request.env['res.users']
+
+    def _get_chat_api_user(self):
+        token_user = self._get_user_from_react_token()
+        if token_user and token_user.exists():
+            return token_user
+        return self._get_current_website_user()
+
+    def _get_or_create_realtime_channel(self, partner):
+        channel_model = self._get_realtime_channel_model_name()
+        if not channel_model:
+            return request.env['res.users']
+
+        channel_name = f'WEBCHAT:{partner.id}'
+        Channel = request.env[channel_model].sudo()
+
+        channel = Channel.search([('name', '=', channel_name)], limit=1)
+
+        admin_group = request.env.ref('base.group_system', raise_if_not_found=False)
+        admin_domain = [
+            ('share', '=', False),
+            ('active', '=', True),
+        ]
+        if admin_group:
+            admin_domain.append(('groups_id', 'in', [admin_group.id]))
+        admin_users = request.env['res.users'].sudo().search(admin_domain)
+        if not admin_users:
+            admin_users = request.env['res.users'].sudo().search([
+                ('share', '=', False),
+                ('active', '=', True),
+            ], limit=1)
+
+        partner_ids = list({partner.id, *admin_users.mapped('partner_id').ids})
+
+        if channel:
+            if channel_model == 'discuss.channel':
+                existing_members = channel.channel_member_ids
+                existing_partner_ids = set(existing_members.mapped('partner_id').ids)
+                missing_partner_ids = [pid for pid in partner_ids if pid not in existing_partner_ids]
+                remove_member_ids = existing_members.filtered(
+                    lambda m: m.partner_id.id not in partner_ids
+                ).ids
+
+                member_commands = []
+                if remove_member_ids:
+                    member_commands.extend([(2, member_id, 0) for member_id in remove_member_ids])
+                if missing_partner_ids:
+                    member_commands.extend([
+                        (0, 0, {'partner_id': partner_id}) for partner_id in missing_partner_ids
+                    ])
+
+                write_vals = {}
+                if member_commands:
+                    write_vals['channel_member_ids'] = member_commands
+                if write_vals:
+                    channel.write(write_vals)
+            else:
+                existing_partner_ids = set(channel.channel_partner_ids.ids)
+                write_vals = {}
+                if set(partner_ids) != existing_partner_ids:
+                    write_vals['channel_partner_ids'] = [(6, 0, partner_ids)]
+                if write_vals:
+                    channel.write(write_vals)
+            return channel
+
+        create_vals = {
+            'name': channel_name,
+            'channel_type': 'chat',
+        }
+        if channel_model == 'discuss.channel':
+            create_vals['channel_member_ids'] = [
+                (0, 0, {'partner_id': partner_id}) for partner_id in partner_ids
+            ]
+        else:
+            create_vals['channel_partner_ids'] = [(6, 0, partner_ids)]
+        if 'public' in Channel._fields:
+            create_vals['public'] = 'private'
+        return Channel.create(create_vals)
+
+    def _is_channel_member(self, channel, partner):
+        if not channel or not channel.exists() or not partner or not partner.exists():
+            return False
+        if partner in channel.channel_partner_ids:
+            return True
+
+        member_model = self._get_realtime_member_model_name()
+        if not member_model:
+            return False
+
+        member_count = request.env[member_model].sudo().search_count([
+            ('channel_id', '=', channel.id),
+            ('partner_id', '=', partner.id),
+        ])
+        return bool(member_count)
 
     def _get_current_website_user(self):
         # token_user = self._get_user_from_react_token()
@@ -477,6 +588,150 @@ class AuthPortalController(http.Controller):
             'response': {
                 'token': 'token_%s_%s' % (user.id, secrets.token_hex(8)),
                 'expires_in': 7 * 24 * 3600,
+            }
+        })
+
+    @http.route('/api/rt-chat/session', type='http', auth='public', methods=['POST'], csrf=False)
+    def rt_chat_session(self, **kwargs):
+        user = self._get_chat_api_user()
+        if not user or not user.exists() or user._is_public():
+            return _make_response({'code': 401, 'message': 'Not authenticated', 'response': None}, 401)
+
+        channel_model = self._get_realtime_channel_model_name()
+        if not channel_model:
+            return _make_response({'code': 503, 'message': 'Realtime channel model not available', 'response': None}, 503)
+
+        partner = user.partner_id
+        if not partner:
+            return _make_response({'code': 400, 'message': 'User has no partner', 'response': None}, 400)
+
+        channel = self._get_or_create_realtime_channel(partner)
+        last_msg = request.env['mail.message'].sudo().search([
+            ('model', '=', channel_model),
+            ('res_id', '=', channel.id),
+        ], order='id desc', limit=1)
+
+        return _make_response({
+            'code': 200,
+            'message': 'Realtime chat session ready',
+            'response': {
+                'channel_id': channel.id,
+                'channel_name': channel.name,
+                'partner_id': partner.id,
+                'last_message_id': last_msg.id if last_msg else 0,
+            }
+        })
+
+    @http.route('/api/rt-chat/messages', type='http', auth='public', methods=['GET'], csrf=False)
+    def rt_chat_messages(self, **kwargs):
+        user = self._get_chat_api_user()
+        if not user or not user.exists() or user._is_public():
+            return _make_response({'code': 401, 'message': 'Not authenticated', 'response': None}, 401)
+
+        channel_model = self._get_realtime_channel_model_name()
+        if not channel_model:
+            return _make_response({'code': 503, 'message': 'Realtime channel model not available', 'response': None}, 503)
+
+        partner = user.partner_id
+        try:
+            channel_id = int(kwargs.get('channel_id', 0))
+            after_id = int(kwargs.get('after_id', 0))
+        except Exception:
+            return _make_response({'code': 400, 'message': 'channel_id or after_id khong hop le', 'response': None}, 400)
+
+        channel = request.env[channel_model].sudo().browse(channel_id)
+        if not channel.exists():
+            return _make_response({'code': 404, 'message': 'Channel not found', 'response': None}, 404)
+
+        if not self._is_channel_member(channel, partner):
+            return _make_response({'code': 403, 'message': 'Forbidden channel', 'response': None}, 403)
+
+        messages = request.env['mail.message'].sudo().search([
+            ('model', '=', channel_model),
+            ('res_id', '=', channel.id),
+            ('id', '>', after_id),
+            ('message_type', 'in', ['comment', 'email', 'notification']),
+        ], order='id asc', limit=100)
+
+        serialized = []
+        last_id = after_id
+        for msg in messages:
+            serialized.append({
+                'id': msg.id,
+                'body': msg.body or '',
+                'author_name': msg.author_id.name if msg.author_id else 'System',
+                'author_partner_id': msg.author_id.id if msg.author_id else False,
+                'date': fields.Datetime.to_string(msg.date) if msg.date else '',
+                'is_mine': bool(msg.author_id and msg.author_id.id == partner.id),
+            })
+            last_id = msg.id
+
+        return _make_response({
+            'code': 200,
+            'message': 'OK',
+            'response': {
+                'messages': serialized,
+                'last_message_id': last_id,
+                'channel_id': channel.id,
+            }
+        })
+
+    @http.route('/api/rt-chat/send', type='http', auth='public', methods=['POST'], csrf=False)
+    def rt_chat_send(self, **kwargs):
+        user = self._get_chat_api_user()
+        if not user or not user.exists() or user._is_public():
+            return _make_response({'code': 401, 'message': 'Not authenticated', 'response': None}, 401)
+
+        channel_model = self._get_realtime_channel_model_name()
+        if not channel_model:
+            return _make_response({'code': 503, 'message': 'Realtime channel model not available', 'response': None}, 503)
+
+        data = _parse_json(request.httprequest.data)
+        if data is None:
+            return _make_response({'code': 400, 'message': 'JSON khong hop le', 'response': None}, 400)
+
+        try:
+            channel_id = int(data.get('channel_id', 0))
+        except Exception:
+            channel_id = 0
+        body = (data.get('message') or '').strip()
+
+        if not channel_id or not body:
+            return _make_response({'code': 400, 'message': 'channel_id va message la bat buoc', 'response': None}, 400)
+
+        channel = request.env[channel_model].sudo().browse(channel_id)
+        if not channel.exists():
+            return _make_response({'code': 404, 'message': 'Channel not found', 'response': None}, 404)
+
+        partner = user.partner_id
+        if not self._is_channel_member(channel, partner):
+            return _make_response({'code': 403, 'message': 'Forbidden channel', 'response': None}, 403)
+
+        try:
+            message = channel.with_user(user).message_post(
+                body=body,
+                message_type='comment',
+                subtype_xmlid='mail.mt_comment',
+                author_id=partner.id,
+            )
+        except Exception:
+            message = channel.sudo().message_post(
+                body=body,
+                message_type='comment',
+                subtype_xmlid='mail.mt_comment',
+                author_id=partner.id,
+            )
+
+        return _make_response({
+            'code': 200,
+            'message': 'Message sent',
+            'response': {
+                'id': message.id,
+                'channel_id': channel.id,
+                'body': message.body or '',
+                'author_name': partner.name,
+                'author_partner_id': partner.id,
+                'date': fields.Datetime.to_string(message.date) if message.date else '',
             }
         })
 
