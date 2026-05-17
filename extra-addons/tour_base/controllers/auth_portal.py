@@ -974,6 +974,10 @@ class AuthPortalController(http.Controller):
             for order in orders:
                 lines = []
                 for line in order.order_line.filtered(lambda l: not l.display_type):
+                    image_url = ''
+                    if line.product_id.image_128:
+                        image_url = f'/web/image/product.product/{line.product_id.id}/image_128/128x128'
+                    
                     lines.append({
                         'id': line.id,
                         'product_id': line.product_id.id,
@@ -982,8 +986,39 @@ class AuthPortalController(http.Controller):
                         'price_unit': line.price_unit,
                         'price_subtotal': line.price_subtotal,
                         'price_total': line.price_total,
-                        'image_url': f'/web/image/product.product/{line.product_id.id}/image_128/128x128' if line.product_id.image_128 else '',
+                        'image_url': image_url,
                     })
+
+                # Get invoice information
+                invoices = order.invoice_ids.filtered(lambda inv: inv.move_type == 'out_invoice')
+                invoice_data = []
+                is_fully_paid = False
+                
+                if invoices:
+                    for invoice in invoices:
+                        preview_url = ''
+                        pdf_url = ''
+                        try:
+                            preview_url = invoice.get_portal_url()
+                            pdf_url = invoice.get_portal_url(report_type='pdf', download=False)
+                        except Exception:
+                            token = invoice._portal_ensure_token() if hasattr(invoice, '_portal_ensure_token') else ''
+                            token_query = f'?access_token={token}' if token else ''
+                            preview_url = f'/my/invoices/{invoice.id}{token_query}'
+                            pdf_url = f'/report/pdf/account.report_invoice_with_payments/{invoice.id}{token_query}'
+
+                        invoice_data.append({
+                            'id': invoice.id,
+                            'number': invoice.name or invoice.id,
+                            'invoice_date': invoice.invoice_date.isoformat() if invoice.invoice_date else '',
+                            'amount_total': invoice.amount_total,
+                            'payment_state': invoice.payment_state,
+                            'preview_url': preview_url,
+                            'pdf_url': pdf_url,
+                        })
+                    is_fully_paid = all(inv.payment_state == 'paid' for inv in invoices)
+                else:
+                    is_fully_paid = order.state in ['done']
 
                 data_orders.append({
                     'id': order.id,
@@ -997,6 +1032,8 @@ class AuthPortalController(http.Controller):
                     'currency': order.currency_id.name if order.currency_id else 'VND',
                     'line_count': len(lines),
                     'lines': lines,
+                    'invoice_ids': invoice_data,
+                    'is_paid': is_fully_paid,
                 })
 
             return _make_response({
