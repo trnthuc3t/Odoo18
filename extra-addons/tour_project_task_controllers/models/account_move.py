@@ -367,11 +367,6 @@ class AccountMove(models.Model):
             'manager_id': template.manager_id.id if template.manager_id else False,
         }
         
-        # Add stage if specified
-        if template.stage_id:
-            task_vals['stage_id'] = template.stage_id.id
-        
-        # Create task
         task = self.env['project.task'].create(task_vals)
         
         _logger.info(f"Created task '{task.name}' from template '{template.name}' for project {project.name}")

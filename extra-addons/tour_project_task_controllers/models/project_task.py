@@ -75,12 +75,6 @@ class ProjectTask(models.Model):
         string="Blocking Tasks",
         help="These tasks depend on this task (blocked tasks)"
     )
-    priority = fields.Selection(
-            selection_add=[
-                ('2', 'Urgent')
-            ],
-            ondelete={'2': 'set default'}
-        )
 
     stage_id = fields.Many2one('project.task.type', string='Stage', compute='_compute_stage_id',
         store=True, readonly=False, ondelete='restrict', tracking=True, index=True,
@@ -118,7 +112,8 @@ class ProjectTask(models.Model):
     def  _constrains_stage_id_set_state(self):
         stage_state_map = {
             'New': '01_in_progress',
-            'Processing': '01_in_progress',
+            'Processing': '02_changes_requested',
+            'Ending': '1_done',
             'Approving': '03_approved',
             'Pending': '04_waiting_normal',
             'Finished': '1_done',
@@ -129,7 +124,7 @@ class ProjectTask(models.Model):
                 rec.state = stage_state_map[rec.stage_id.name]
             if rec.project_id:
                 all_project_tasks = self.env['project.task'].search([('project_id', '=', rec.project_id.id)])
-                task_not_finished = all_project_tasks.filtered(lambda t: t.stage_id.name != 'Finished')
+                task_not_finished = all_project_tasks.filtered(lambda t: t.stage_id.name not in ('Finished', 'Ending'))
                 if not task_not_finished:
                     happy_ending_stage = self.env['project.project.stage'].search([('name', 'ilike', 'Happy Ending')], limit=1)
                     rec.project_id.stage_id = happy_ending_stage.id if happy_ending_stage else False
@@ -142,12 +137,15 @@ class ProjectTask(models.Model):
             '02_changes_requested': 'Processing',
             '03_approved': 'Approving',
             '04_waiting_normal': 'Pending',
-            '1_done': 'Finished',
+            '1_done': 'Ending',
             '1_canceled': 'Cancelled',
         }
         for rec in self:
             if rec.state in state_stage_map:
                 stage = self.env['project.task.type'].search([('name', '=', state_stage_map[rec.state])], limit=1)
+                if not stage and rec.state == '1_done':
+                    # Backward compatibility with old stage naming.
+                    stage = self.env['project.task.type'].search([('name', '=', 'Finished')], limit=1)
                 if stage:
                     rec.stage_id = stage
 
@@ -160,12 +158,12 @@ class ProjectTask(models.Model):
             if task.depend_on_ids:
                 # Check if all dependent tasks are in closed/folded stage
                 all_completed = all(
-                    dep.stage_id.name in ('Finished', 'Cancelled')
+                    dep.stage_id.name in ('Finished', 'Ending', 'Cancelled')
                     for dep in task.depend_on_ids 
                     if dep.stage_id
                 )
                 task.dependencies_completed = all_completed
-                if all_completed and not task.stage_id.name in ('Finished', 'Cancelled'):
+                if all_completed and not task.stage_id.name in ('Finished', 'Ending', 'Cancelled'):
                     task.can_start = True
                     task.date_start = fields.Datetime.now()
                     if task.date_deadline < fields.Datetime.now():
@@ -230,3 +228,31 @@ class TaskStage(models.Model):
         default=False,
         help="Indicates if this stage can be selected in task templates"
     )
+
+    @api.model
+    def _ensure_default_tour_task_stages(self):
+        defaults = [
+            ('New', 10),
+            ('Processing', 20),
+            ('Ending', 30),
+        ]
+        for name, sequence in defaults:
+            stage = self.search([('name', '=', name)], limit=1)
+            if not stage:
+                self.create({
+                    'name': name,
+                    'sequence': sequence,
+                    'is_usable': True,
+                    'fold': False,
+                })
+            else:
+                vals = {}
+                if not stage.is_usable:
+                    vals['is_usable'] = True
+                if stage.fold:
+                    vals['fold'] = False
+                if vals:
+                    stage.write(vals)
+
+    def init(self):
+        self._ensure_default_tour_task_stages()

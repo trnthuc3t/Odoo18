@@ -18,7 +18,12 @@ class TaskTemplate(models.Model):
     sequence = fields.Integer(string="Sequence", default=10, help="Order of task execution")
     
     # Assignment Fields
-    user_id = fields.Many2one('res.users', string="Assigned User")
+    user_id = fields.Many2one(
+        'res.users',
+        string="Assigned User",
+        domain=[('employee_ids', '!=', False)],
+        help="Only users linked to an Employee can be selected.",
+    )
     mentor = fields.Many2one('res.users', string="Mentor")
     manager_id = fields.Many2one('res.users', string="Manager")
     is_assign_salesperson = fields.Boolean(string="Assign to Salesperson", default=False)

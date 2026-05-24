@@ -51,7 +51,6 @@
                             <field name="subtask_count" column_invisible="True"/>
                             <field name="closed_subtask_count" column_invisible="True"/>
                             <field name="id" optional="hide" options="{'enable_formatting': False}"/>
-                            <field name="priority" widget="priority" nolabel="1" width="20px"/>
                             <field name="state" widget="project_task_state_selection" nolabel="1" width="20px"/>
                             <field name="name" widget="name_with_subtask_count"/>
                             <field name="project_id" optional="hide" options="{'no_open': 1}" />
@@ -93,6 +92,20 @@
             <xpath expr="//field[@name='project_id']" position="attributes">
                 <attribute name="readonly">1</attribute>
                 <attribute name="options">{'no_create': True, 'no_open': True}</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='stage_id']" position="attributes">
+                <attribute name="domain">[('name', 'in', ['New', 'Processing', 'Ending'])]</attribute>
+            </xpath>
+
+            <xpath expr="//header//field[@name='state']" position="replace"/>
+
+            <xpath expr="//field[@name='state']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='priority']" position="attributes">
+                <attribute name="invisible">1</attribute>
             </xpath>
             
             <!-- Add Dependencies tab -->
@@ -155,14 +168,25 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='stage_id']" position="attributes">
                 <attribute name="context">{}</attribute>
+                <attribute name="domain">[('name', 'in', ['New', 'Processing', 'Ending'])]</attribute>
+            </xpath>
+            <xpath expr="//field[@name='state']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//field[@name='priority']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+                <attribute name="optional">hide</attribute>
             </xpath>
         </field>
     </record>
 
     <record id="project.action_view_my_task" model="ir.actions.act_window">
+        <field name="domain">[('user_ids', 'in', [uid])]</field>
         <field name="context">{
             'all_task': 0,
             'default_user_ids': [(4, uid)],
+            'search_default_my_tasks': 1,
             'sale_show_partner_name': True,
         }</field>
     </record>
@@ -206,6 +230,12 @@
         <field name="model">project.task</field>
         <field name="inherit_id" ref="project.view_task_kanban"/>
         <field name="arch" type="xml">
+            <xpath expr="//field[@name='state']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='priority']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
             <xpath expr="//field[@name='user_ids']" position="after">
                 <field name="mentor_id"/>
                 <!-- <field name="can_start"/>
