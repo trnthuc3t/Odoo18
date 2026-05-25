@@ -22,6 +22,50 @@ def _is_valid_email(email):
 
 class AuthPortalController(http.Controller):
 
+    def _get_default_web_pricelist(self):
+        pricelist = request.env['product.pricelist'].sudo().browse(2)
+        return pricelist if pricelist.exists() else request.env['product.pricelist']
+
+    def _get_web_single_price(self, product_tmpl):
+        if not product_tmpl or product_tmpl.type == 'combo':
+            return product_tmpl.list_price if product_tmpl else 0.0
+
+        variant = product_tmpl.product_variant_id or request.env['product.product'].sudo().search([
+            ('product_tmpl_id', '=', product_tmpl.id)
+        ], limit=1)
+        if not variant:
+            return product_tmpl.list_price
+
+        pricelist = self._get_default_web_pricelist()
+        if not pricelist:
+            return product_tmpl.list_price
+
+        try:
+            if hasattr(pricelist, '_get_product_price'):
+                return pricelist._get_product_price(variant, 1.0, partner=False)
+
+            price_rules = pricelist._compute_price_rule([(variant, 1.0, False)])
+            return price_rules.get(variant.id, (product_tmpl.list_price, False))[0]
+        except Exception:
+            return product_tmpl.list_price
+
+    def _get_web_variant_price(self, variant):
+        if not variant or not variant.exists():
+            return 0.0
+
+        pricelist = self._get_default_web_pricelist()
+        if not pricelist:
+            return variant.lst_price
+
+        try:
+            if hasattr(pricelist, '_get_product_price'):
+                return pricelist._get_product_price(variant, 1.0, partner=False)
+
+            price_rules = pricelist._compute_price_rule([(variant, 1.0, False)])
+            return price_rules.get(variant.id, (variant.lst_price, False))[0]
+        except Exception:
+            return variant.lst_price
+
     def _get_realtime_channel_model_name(self):
         registry = request.env.registry
         if 'discuss.channel' in registry.models:
@@ -773,7 +817,12 @@ class AuthPortalController(http.Controller):
 
             limit = min(max(limit, 1), 100)
 
-            domain = [('sale_ok', '=', True)]
+            domain = [
+                ('sale_ok', '=', True),
+                '|',
+                ('type', '=', 'combo'),
+                ('is_single_purchase_available', '=', True),
+            ]
             if search:
                 domain.append(('name', 'ilike', f'%{search}%'))
 
@@ -784,11 +833,12 @@ class AuthPortalController(http.Controller):
             items = []
             for p in products:
                 is_combo = (p.type == 'combo')
+                list_price = p.list_price if is_combo else self._get_web_single_price(p)
                 items.append({
                     'id': p.id,
                     'name': p.name,
                     'default_code': p.default_code or '',
-                    'list_price': p.list_price,
+                    'list_price': list_price,
                     'currency': p.currency_id.name if p.currency_id else 'VND',
                     'description': p.description_sale or '',
                     'detail_information': getattr(p, 'detail_information', '') or '',
@@ -798,6 +848,7 @@ class AuthPortalController(http.Controller):
                     'image_url': self._build_product_image_url(p, '600x600'),
                     'type': p.type or 'consu',
                     'is_combo': is_combo,
+                    'is_single_purchase_available': bool(getattr(p, 'is_single_purchase_available', False)),
                     'is_combo_multiple_choice': bool(getattr(p, 'is_combo_multiple_choice', False)) if is_combo else False,
                     'is_day_tour': bool(getattr(p, 'is_day_tour', False)) if is_combo else False,
                     'has_combos': bool(p.combo_ids) if is_combo else False,
@@ -827,6 +878,9 @@ class AuthPortalController(http.Controller):
             if not product.exists() or not product.sale_ok:
                 return _make_response({'code': 404, 'message': 'San pham khong ton tai', 'response': None}, 404)
 
+            if product.type != 'combo' and not getattr(product, 'is_single_purchase_available', False):
+                return _make_response({'code': 404, 'message': 'San pham khong duoc ban le tren web', 'response': None}, 404)
+
             combos = []
             for combo in product.combo_ids:
                 combo_items = []
@@ -850,6 +904,42 @@ class AuthPortalController(http.Controller):
                     'items': combo_items,
                 })
 
+            variant_attributes = []
+            for line in product.attribute_line_ids:
+                values = []
+                for value in line.value_ids:
+                    values.append({
+                        'id': value.id,
+                        'name': value.name,
+                    })
+                variant_attributes.append({
+                    'attribute_id': line.attribute_id.id,
+                    'attribute_name': line.attribute_id.name,
+                    'values': values,
+                })
+
+            variants = []
+            for variant in product.product_variant_ids:
+                ptav_values = variant.product_template_attribute_value_ids
+                variants.append({
+                    'id': variant.id,
+                    'name': variant.display_name,
+                    'list_price': self._get_web_variant_price(variant),
+                    'attribute_value_ids': ptav_values.mapped('product_attribute_value_id').ids,
+                    'attribute_values': [
+                        {
+                            'id': value.product_attribute_value_id.id,
+                            'name': value.name,
+                            'attribute_id': value.attribute_id.id,
+                            'attribute_name': value.attribute_id.name,
+                        }
+                        for value in ptav_values
+                    ],
+                    'is_active': bool(getattr(variant, 'active', True)),
+                })
+
+            default_variant_id = product.product_variant_id.id if product.product_variant_id else (variants[0]['id'] if variants else False)
+
             return _make_response({
                 'code': 200,
                 'message': 'OK',
@@ -858,7 +948,7 @@ class AuthPortalController(http.Controller):
                         'id': product.id,
                         'name': product.name,
                         'default_code': product.default_code or '',
-                        'list_price': product.list_price,
+                        'list_price': product.list_price if product.type == 'combo' else self._get_web_single_price(product),
                         'currency': product.currency_id.name if product.currency_id else 'VND',
                         'description': product.description_sale or '',
                         'detail_information': getattr(product, 'detail_information', '') or '',
@@ -868,10 +958,14 @@ class AuthPortalController(http.Controller):
                         'image_url': self._build_product_image_url(product, '1200x600'),
                         'type': product.type or 'consu',
                         'is_combo': product.type == 'combo',
+                        'is_single_purchase_available': bool(getattr(product, 'is_single_purchase_available', False)),
                         'is_combo_multiple_choice': bool(getattr(product, 'is_combo_multiple_choice', False)),
                         'is_day_tour': bool(getattr(product, 'is_day_tour', False)),
                     },
                     'combos': combos,
+                    'variant_attributes': variant_attributes,
+                    'variants': variants,
+                    'default_variant_id': default_variant_id,
                 }
             })
         except Exception as e:

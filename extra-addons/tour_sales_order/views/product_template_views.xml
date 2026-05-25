@@ -6,6 +6,10 @@
         <field name="model">product.template</field>
         <field name="inherit_id" ref="product.product_template_form_view"/>
         <field name="arch" type="xml">
+            <xpath expr="//field[@name='purchase_ok']" position="after">
+                <field name="is_single_purchase_available" widget="boolean_toggle" invisible="type == 'combo'"/>
+            </xpath>
+
             <xpath expr="//page[@name='sales']" position="after">
                 <page string="Detail Information" name="detail_information">
                     <group>

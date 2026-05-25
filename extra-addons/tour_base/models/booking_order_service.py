@@ -297,9 +297,21 @@ class TourBookingOrderService(models.AbstractModel):
         if not product.exists() or not product.sale_ok:
             return {'error': 'San pham khong ton tai', 'status': 404}
 
-        variant = product.product_variant_id or self.env['product.product'].sudo().search([
-            ('product_tmpl_id', '=', product.id)
-        ], limit=1)
+        variant_id = data.get('variant_id')
+        variant = self.env['product.product']
+        if variant_id:
+            try:
+                variant_id = int(variant_id)
+                variant = self.env['product.product'].sudo().browse(variant_id)
+                if not variant.exists() or variant.product_tmpl_id.id != product.id:
+                    return {'error': 'Bien the san pham khong hop le', 'status': 400}
+            except Exception:
+                return {'error': 'variant_id khong hop le', 'status': 400}
+
+        if not variant:
+            variant = product.product_variant_id or self.env['product.product'].sudo().search([
+                ('product_tmpl_id', '=', product.id)
+            ], limit=1)
         if not variant:
             return {'error': 'Khong tim thay bien the san pham', 'status': 400}
 
@@ -340,6 +352,11 @@ class TourBookingOrderService(models.AbstractModel):
             'partner_shipping_id': partner.id,
             'note': '\n'.join(note_parts) if note_parts else False,
         }
+
+        if product.type != 'combo':
+            web_pricelist = self.env['product.pricelist'].sudo().browse(2)
+            if web_pricelist.exists():
+                order_vals['pricelist_id'] = web_pricelist.id
 
         if payment_term:
             order_vals['payment_term_id'] = payment_term.id

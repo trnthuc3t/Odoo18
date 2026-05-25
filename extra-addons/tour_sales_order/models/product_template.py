@@ -5,6 +5,12 @@ from odoo import models, fields
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
 
+    is_single_purchase_available = fields.Boolean(
+        string='Can Buy Single On Web',
+        default=False,
+        help='Enable to show this non-combo product on React website for single purchase.',
+    )
+
     detail_information = fields.Html(
         string='Detail Information',
         translate=True,
