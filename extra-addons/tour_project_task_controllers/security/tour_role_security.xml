@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Role category shown in Settings > Users > Access Rights -->
+    <record id="module_category_tour_roles" model="ir.module.category">
+        <field name="name">Tour Roles</field>
+        <field name="description">Business roles for tour operations</field>
+        <field name="sequence">65</field>
+    </record>
+
+    <record id="group_tour_coordinator" model="res.groups">
+        <field name="name">Tour Coordinator</field>
+        <field name="category_id" ref="tour_project_task_controllers.module_category_tour_roles"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="comment">Can edit Product and Project, cannot access accounting data.</field>
+    </record>
+
+    <record id="group_tour_accountant" model="res.groups">
+        <field name="name">Tour Accountant</field>
+        <field name="category_id" ref="tour_project_task_controllers.module_category_tour_roles"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user')), (4, ref('account.group_account_invoice'))]"/>
+        <field name="comment">Can view Project, Sale Orders and accounting documents.</field>
+    </record>
+
+    <record id="group_tour_customer_care" model="res.groups">
+        <field name="name">Tour Customer Care</field>
+        <field name="category_id" ref="tour_project_task_controllers.module_category_tour_roles"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="comment">Read-only access to Order, Project and Product, no accounting access.</field>
+    </record>
+
+    <!-- Deny accounting visibility for non-accounting roles -->
+    <record id="rule_account_move_tour_coordinator_no_access" model="ir.rule">
+        <field name="name">Account Move Hidden - Tour Coordinator</field>
+        <field name="model_id" ref="account.model_account_move"/>
+        <field name="domain_force">[(0, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('tour_project_task_controllers.group_tour_coordinator'))]"/>
+    </record>
+
+    <record id="rule_account_move_tour_customer_care_no_access" model="ir.rule">
+        <field name="name">Account Move Hidden - Tour Customer Care</field>
+        <field name="model_id" ref="account.model_account_move"/>
+        <field name="domain_force">[(0, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('tour_project_task_controllers.group_tour_customer_care'))]"/>
+    </record>
+
+    <!-- Deny purchase visibility for coordinator -->
+    <record id="rule_purchase_order_tour_coordinator_no_access" model="ir.rule">
+        <field name="name">Purchase Order Hidden - Tour Coordinator</field>
+        <field name="model_id" ref="purchase.model_purchase_order"/>
+        <field name="domain_force">[(0, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('tour_project_task_controllers.group_tour_coordinator'))]"/>
+    </record>
+
+    <record id="rule_purchase_order_line_tour_coordinator_no_access" model="ir.rule">
+        <field name="name">Purchase Order Line Hidden - Tour Coordinator</field>
+        <field name="model_id" ref="purchase.model_purchase_order_line"/>
+        <field name="domain_force">[(0, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('tour_project_task_controllers.group_tour_coordinator'))]"/>
+    </record>
+
+    <record id="rule_project_task_write_only_own_assigned" model="ir.rule">
+        <field name="name">Project Task Write Own Assigned</field>
+        <field name="model_id" ref="project.model_project_task"/>
+        <field name="domain_force">[('user_ids', 'in', [user.id])]</field>
+        <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+</odoo>

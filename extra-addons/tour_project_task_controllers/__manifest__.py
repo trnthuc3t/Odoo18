@@ -16,6 +16,7 @@
     "depends": [
         "sale",
         "sale_project",
+        "purchase",
         "project",
         "account",
         "hr",
@@ -28,6 +29,7 @@
         "tour_n8n_connector",
     ],
     "data": [
+        "security/tour_role_security.xml",
         "security/ir.model.access.csv",
         "views/product_template_views.xml",
         "views/task_template_views.xml",
@@ -35,6 +37,7 @@
         "views/project_task_views.xml",
         "views/sale_order.xml",
         "views/project_views.xml",
+        "views/role_restriction_views.xml",
         "wizards/create_task_manual_wizard.xml",
         "wizards/export_vat_wizard.xml",
         # "views/order_action.xml",

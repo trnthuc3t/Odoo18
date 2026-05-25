@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Coordinator and customer care cannot see product money fields -->
+    <record id="view_product_template_form_hide_money_for_non_finance_roles" model="ir.ui.view">
+        <field name="name">product.template.form.hide.money.non.finance.roles</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='list_price']" position="attributes">
+                <attribute name="groups">!tour_project_task_controllers.group_tour_coordinator,!tour_project_task_controllers.group_tour_customer_care</attribute>
+            </xpath>
+            <xpath expr="//field[@name='standard_price']" position="attributes">
+                <attribute name="groups">!tour_project_task_controllers.group_tour_coordinator,!tour_project_task_controllers.group_tour_customer_care</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>
