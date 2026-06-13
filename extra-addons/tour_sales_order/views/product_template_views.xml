@@ -6,8 +6,19 @@
         <field name="model">product.template</field>
         <field name="inherit_id" ref="product.product_template_form_view"/>
         <field name="arch" type="xml">
+            <xpath expr="//field[@name='purchase_ok']" position="after">
+                <field name="is_single_purchase_available" widget="boolean_toggle" invisible="type == 'combo'"/>
+            </xpath>
+
             <xpath expr="//page[@name='sales']" position="after">
                 <page string="Detail Information" name="detail_information">
+                    <group>
+                        <group>
+                            <field name="tour_duration" placeholder="Vi du: 3 Ngay 2 Dem"/>
+                            <field name="tour_location_address" placeholder="Dia chi hien thi tren website"/>
+                            <field name="tour_location_map_url" placeholder="https://maps.app.goo.gl/..."/>
+                        </group>
+                    </group>
                     <field name="detail_information" widget="html" nolabel="1"/>
                 </page>
             </xpath>
@@ -21,6 +32,13 @@
         <field name="arch" type="xml">
             <form string="Detail Information">
                 <sheet>
+                    <group>
+                        <group>
+                            <field name="tour_duration" readonly="1"/>
+                            <field name="tour_location_address" readonly="1"/>
+                            <field name="tour_location_map_url" readonly="1"/>
+                        </group>
+                    </group>
                     <field name="detail_information" widget="html" readonly="1"/>
                 </sheet>
                 <footer>

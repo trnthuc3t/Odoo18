@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 
+import logging
+
 from odoo import models, fields, api
+
+
+_logger = logging.getLogger(__name__)
 
 
 class SaleOrderLine(models.Model):
@@ -27,7 +32,12 @@ class SaleOrderLine(models.Model):
             info = line.product_id.product_tmpl_id.detail_information if line.product_id else False
             has_info = bool(info) and len(str(info).strip()) > 0
             line.has_travel_itinerary = has_info
-            print(f"DEBUG: Line ID {line.id} - Product {line.product_id.name if line.product_id else 'None'} - Info Len: {len(str(info)) if info else 0} - Result: {has_info}")
+            _logger.debug(
+                "Itinerary flag computed: line_id=%s product=%s has_info=%s",
+                line.id,
+                line.product_id.name if line.product_id else 'None',
+                has_info,
+            )
 
     @api.depends('product_id')
     def _compute_travel_itinerary_display(self):

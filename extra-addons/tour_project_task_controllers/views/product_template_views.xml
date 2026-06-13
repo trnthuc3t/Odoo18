@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_product_template_form_inherit_task_templates" model="ir.ui.view">
+        <field name="name">product.template.form.inherit.task.templates</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='detail_information']" position="after">
+                <page string="Task Templates" name="task_templates">
+                    <group>
+                        <field name="task_template_ids"
+                               context="{'default_product_template_ids': [(6, 0, [id])]}"
+                               nolabel="1">
+                            <list editable="bottom" string="Task Templates">
+                                <field name="name"/>
+                                <field name="description"/>
+                                <field name="user_id"/>
+                                <field name="start_offset"/>
+                                <field name="start_offset_unit"/>
+                                <field name="duration"/>
+                                <field name="duration_unit"/>
+                                <field name="is_active" optional="hide"/>
+                            </list>
+                            <form string="Task Template">
+                                <sheet>
+                                    <group>
+                                        <group>
+                                            <field name="name"/>
+                                            <field name="user_id"/>
+                                            <field name="is_assign_salesperson"/>
+                                        </group>
+                                        <group>
+                                            <field name="start_offset"/>
+                                            <field name="start_offset_unit"/>
+                                            <field name="duration"/>
+                                            <field name="duration_unit"/>
+                                        </group>
+                                    </group>
+                                    <group>
+                                        <field name="description" widget="html"/>
+                                    </group>
+                                </sheet>
+                            </form>
+                        </field>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

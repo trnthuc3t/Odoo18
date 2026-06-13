@@ -8,6 +8,10 @@ _logger = logging.getLogger(__name__)
 class AccountMove(models.Model):
     _inherit = 'account.move'
 
+    def _get_runtime_environment(self):
+        self.ensure_one()
+        return self.env['ir.config_parameter'].sudo().get_param('web.base.env', default='local')
+
     is_guarantee_invoice = fields.Boolean(
         string='Is Guarantee Invoice', 
         default=False, 
@@ -25,7 +29,7 @@ class AccountMove(models.Model):
     def _constraints_payment_state(self):
         for record in self:
             if record.payment_state in ('paid', 'parital') and not record.tasks_generated:
-                if record.get_environment() == 'local':
+                if record._get_runtime_environment() == 'local':
                     record._generate_tasks_from_invoice()
                 else:
                     record._generate_tasks_from_invoice_queue()
@@ -255,7 +259,7 @@ class AccountMove(models.Model):
                 sorted_templates = templates
             created_tasks = []
             task_map = {}
-            base_datetime = fields.Datetime.now()
+            base_datetime = order._get_product_template_task_base_datetime()
             for template in sorted_templates:
                 # Nếu template is_no_duplicate_task, kiểm tra project đã có task này chưa
                 if template.is_no_duplicate_task:
@@ -363,11 +367,6 @@ class AccountMove(models.Model):
             'manager_id': template.manager_id.id if template.manager_id else False,
         }
         
-        # Add stage if specified
-        if template.stage_id:
-            task_vals['stage_id'] = template.stage_id.id
-        
-        # Create task
         task = self.env['project.task'].create(task_vals)
         
         _logger.info(f"Created task '{task.name}' from template '{template.name}' for project {project.name}")
@@ -383,7 +382,7 @@ class AccountMove(models.Model):
             return
         if not self.move_type == "out_invoice":
             return
-        if self.get_environment() == 'local':
+        if self._get_runtime_environment() == 'local':
             self._generate_tasks_from_invoice()
         else:
             self._generate_tasks_from_invoice_queue()

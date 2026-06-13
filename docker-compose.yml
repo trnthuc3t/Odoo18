@@ -14,8 +14,9 @@ services:
     image: odoo:18.0
     depends_on:
       - db
-    ports:
-      - "8070:8069"
+    expose:
+      - "8069"
+      - "8072"
     volumes:
       - odoo-web-data:/var/lib/odoo
       - ./extra-addons:/mnt/extra-addons # Nơi bạn code module Travel
@@ -24,6 +25,23 @@ services:
       - HOST=db
       - USER=openpg
       - PASSWORD=openpgpwd
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - odoo
+    ports:
+      - "8069:80"
+    volumes:
+      - ./config/nginx-odoo.conf:/etc/nginx/conf.d/default.conf:ro
+
+  chatwebsocket:
+    build:
+      context: ../ChatWebSocket
+    depends_on:
+      - nginx
+    ports:
+      - "8000:8000"
 
 volumes:
   odoo-db-data:
