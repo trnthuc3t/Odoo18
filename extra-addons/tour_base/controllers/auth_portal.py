@@ -66,6 +66,76 @@ class AuthPortalController(http.Controller):
         except Exception:
             return variant.lst_price
 
+    def _convert_combo_price(self, amount, source_currency, target_currency, company):
+        if not amount:
+            return 0.0
+        if source_currency and target_currency and source_currency != target_currency:
+            return source_currency._convert(
+                from_amount=amount,
+                to_currency=target_currency,
+                company=company or request.env.company,
+                date=fields.Date.today(),
+            )
+        return amount
+
+    def _get_web_combo_item_unit_price(self, product_tmpl, combo_item):
+        target_currency = product_tmpl.currency_id
+        company = combo_item.company_id or request.env.company
+        fixed_price = getattr(combo_item, 'fixed_price', 0.0) or 0.0
+
+        if fixed_price > 0 and (
+            getattr(product_tmpl, 'is_combo_multiple_choice', False)
+            or getattr(product_tmpl, 'is_day_tour', False)
+        ):
+            return self._convert_combo_price(
+                fixed_price,
+                combo_item.currency_id,
+                target_currency,
+                company,
+            )
+
+        price = combo_item.product_id.lst_price if combo_item.product_id else 0.0
+        extra_price = getattr(combo_item, 'extra_price', 0.0) or 0.0
+        if extra_price:
+            try:
+                price += request.env['product.combo.item'].sudo().get_extra_price_in_currency(
+                    combo_item_id=combo_item.id,
+                    target_currency_id=target_currency.id,
+                    date=fields.Date.today(),
+                    company_id=company.id,
+                )
+            except Exception:
+                price += self._convert_combo_price(
+                    extra_price,
+                    combo_item.currency_id,
+                    target_currency,
+                    company,
+                )
+
+        return price
+
+    def _get_web_combo_price_from(self, product_tmpl):
+        if not product_tmpl or product_tmpl.type != 'combo':
+            return 0.0
+
+        base_price = product_tmpl.list_price or 0.0
+        combos = product_tmpl.combo_ids.filtered(lambda combo: not getattr(combo, 'is_car_service', False))
+        if not combos:
+            combos = product_tmpl.combo_ids
+
+        combo_prices = []
+        for combo in combos:
+            if not combo.combo_item_ids:
+                continue
+
+            combo_price = base_price
+            for item in combo.combo_item_ids:
+                item_qty = item.quantity or 1.0
+                combo_price += self._get_web_combo_item_unit_price(product_tmpl, item) * item_qty
+            combo_prices.append(combo_price)
+
+        return min(combo_prices) if combo_prices else base_price
+
     def _get_realtime_channel_model_name(self):
         registry = request.env.registry
         if 'discuss.channel' in registry.models:
@@ -814,8 +884,18 @@ class AuthPortalController(http.Controller):
             limit = int(kwargs.get('limit', 20))
             offset = int(kwargs.get('offset', 0))
             search = (kwargs.get('search') or '').strip()
+            price_min = kwargs.get('price_min')
+            price_max = kwargs.get('price_max')
 
             limit = min(max(limit, 1), 100)
+            try:
+                price_min = float(price_min) if price_min not in (None, '') else None
+            except Exception:
+                price_min = None
+            try:
+                price_max = float(price_max) if price_max not in (None, '') else None
+            except Exception:
+                price_max = None
 
             domain = [
                 ('sale_ok', '=', True),
@@ -827,18 +907,25 @@ class AuthPortalController(http.Controller):
                 domain.append(('name', 'ilike', f'%{search}%'))
 
             Product = request.env['product.template'].sudo()
-            total = Product.search_count(domain)
-            products = Product.search(domain, limit=limit, offset=offset)
+            products = Product.search(domain)
 
-            items = []
+            all_items = []
             for p in products:
                 is_combo = (p.type == 'combo')
                 list_price = p.list_price if is_combo else self._get_web_single_price(p)
-                items.append({
+                price_from = self._get_web_combo_price_from(p) if is_combo else list_price
+                if price_min is not None and price_from < price_min:
+                    continue
+                if price_max is not None and price_from > price_max:
+                    continue
+
+                all_items.append({
                     'id': p.id,
                     'name': p.name,
                     'default_code': p.default_code or '',
                     'list_price': list_price,
+                    'price_from': price_from,
+                    'combo_price_from': price_from if is_combo else 0.0,
                     'currency': p.currency_id.name if p.currency_id else 'VND',
                     'description': p.description_sale or '',
                     'detail_information': getattr(p, 'detail_information', '') or '',
@@ -853,6 +940,9 @@ class AuthPortalController(http.Controller):
                     'is_day_tour': bool(getattr(p, 'is_day_tour', False)) if is_combo else False,
                     'has_combos': bool(p.combo_ids) if is_combo else False,
                 })
+
+            total = len(all_items)
+            items = all_items[offset:offset + limit]
 
             return _make_response({
                 'code': 200,
@@ -884,7 +974,11 @@ class AuthPortalController(http.Controller):
             combos = []
             for combo in product.combo_ids:
                 combo_items = []
+                combo_price = product.list_price or 0.0
                 for item in combo.combo_item_ids:
+                    item_unit_price = self._get_web_combo_item_unit_price(product, item)
+                    item_quantity = item.quantity or 1.0
+                    combo_price += item_unit_price * item_quantity
                     combo_items.append({
                         'id': item.id,
                         'combo_item_id': item.id,
@@ -892,6 +986,7 @@ class AuthPortalController(http.Controller):
                         'product_name': item.product_id.display_name,
                         'extra_price': item.extra_price,
                         'fixed_price': item.fixed_price,
+                        'unit_price': item_unit_price,
                         'quantity': item.quantity or 1.0,
                         'min_quantity': item.min_quantity,
                         'max_quantity': item.max_quantity,
@@ -901,6 +996,7 @@ class AuthPortalController(http.Controller):
                     'id': combo.id,
                     'name': combo.name,
                     'is_car_service': bool(getattr(combo, 'is_car_service', False)),
+                    'price_from': combo_price,
                     'items': combo_items,
                 })
 
@@ -939,6 +1035,9 @@ class AuthPortalController(http.Controller):
                 })
 
             default_variant_id = product.product_variant_id.id if product.product_variant_id else (variants[0]['id'] if variants else False)
+            is_combo = product.type == 'combo'
+            list_price = product.list_price if is_combo else self._get_web_single_price(product)
+            price_from = self._get_web_combo_price_from(product) if is_combo else list_price
 
             return _make_response({
                 'code': 200,
@@ -948,7 +1047,9 @@ class AuthPortalController(http.Controller):
                         'id': product.id,
                         'name': product.name,
                         'default_code': product.default_code or '',
-                        'list_price': product.list_price if product.type == 'combo' else self._get_web_single_price(product),
+                        'list_price': list_price,
+                        'price_from': price_from,
+                        'combo_price_from': price_from if is_combo else 0.0,
                         'currency': product.currency_id.name if product.currency_id else 'VND',
                         'description': product.description_sale or '',
                         'detail_information': getattr(product, 'detail_information', '') or '',
@@ -957,7 +1058,7 @@ class AuthPortalController(http.Controller):
                         'tour_location_map_url': getattr(product, 'tour_location_map_url', '') or '',
                         'image_url': self._build_product_image_url(product, '1200x600'),
                         'type': product.type or 'consu',
-                        'is_combo': product.type == 'combo',
+                        'is_combo': is_combo,
                         'is_single_purchase_available': bool(getattr(product, 'is_single_purchase_available', False)),
                         'is_combo_multiple_choice': bool(getattr(product, 'is_combo_multiple_choice', False)),
                         'is_day_tour': bool(getattr(product, 'is_day_tour', False)),
@@ -1005,7 +1106,7 @@ class AuthPortalController(http.Controller):
                 'warnings': warnings,
             }
         })
-
+    # api đặt hàng
     @http.route('/api/orders', type='http', auth='user', methods=['POST'], csrf=False)
     def create_order(self, **kwargs):
         data = _parse_json(request.httprequest.data)
@@ -1147,7 +1248,7 @@ class AuthPortalController(http.Controller):
 
     @http.route('/api/tours-for-chunking', type='http', auth='public', methods=['GET'], csrf=False)
     def get_tours_for_chunking(self, **kwargs):
-        # Lấy danh sách tour không chứa ảnh cho việc chunking dữ liệu vào vector database, chỉ lấy các trường cần thiết và giới hạn độ dài text để tránh lỗi khi lưu trữ
+        # Lấy danh sách tour cho việc chunking dữ liệu vào vector database
         try:
             try:
                 limit = int(request.httprequest.args.get('limit', '50'))

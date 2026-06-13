@@ -244,7 +244,7 @@ class SaleOrder(models.Model):
                 sorted_templates = templates
 
             task_map = {}
-            base_datetime = fields.Datetime.now()
+            base_datetime = self._get_product_template_task_base_datetime()
 
             for template in sorted_templates:
                 if template.is_no_duplicate_task:
@@ -316,6 +316,11 @@ class SaleOrder(models.Model):
                 project.name,
             )
         return all_created_tasks
+
+    def _get_product_template_task_base_datetime(self):
+        """Use the delivery date as the scheduling base for product template tasks."""
+        self.ensure_one()
+        return self.commitment_date or fields.Datetime.now()
     
     def action_generate_tasks_manually(self):
         """Manual action button to generate tasks"""
@@ -359,4 +364,4 @@ class SaleOrder(models.Model):
                 'default_order_id': self.id,
             }
         }
-    
+

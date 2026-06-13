@@ -5,6 +5,7 @@
         <field name="name">Tour Roles</field>
         <field name="description">Business roles for tour operations</field>
         <field name="sequence">65</field>
+        <field name="exclusive" eval="True"/>
     </record>
 
     <record id="group_tour_coordinator" model="res.groups">

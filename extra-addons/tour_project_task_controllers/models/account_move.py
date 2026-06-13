@@ -259,7 +259,7 @@ class AccountMove(models.Model):
                 sorted_templates = templates
             created_tasks = []
             task_map = {}
-            base_datetime = fields.Datetime.now()
+            base_datetime = order._get_product_template_task_base_datetime()
             for template in sorted_templates:
                 # Nếu template is_no_duplicate_task, kiểm tra project đã có task này chưa
                 if template.is_no_duplicate_task:
